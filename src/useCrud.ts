@@ -16,20 +16,19 @@ export type CrudConfig<T extends Item = Item, C = any> = {
     remove?: TransitionFn<T>;
 };
 
-export function useCrud<T extends Item = Item, C extends Record<string, any> = any>(config: CrudConfig<T, C>) {
+export function useCrudOperations<T extends Item = Item, C extends Record<string, any> = any>(config: CrudConfig<T, C>) {
     const configRef = useRef(config);
-    const store = useMemo<Store<T>>(() => Store.createStore({ id: config.id, initialData: [], caching: config.caching }), [config.id]);
-    const state = useSyncExternalStore(store.subscribe, store.getSnapshot);
-
+    const store = useMemo(() => Store.instances.get(config.id), [config.id]);
     const context = useMemo(() => {
         if (isEqual(config.context, configRef.current.context)) {
             return configRef.current.context;
         }
         configRef.current = config;
         return configRef.current.context;
-    }, [config]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [config.id, config.context]);
 
-    useEffect(() => {
+    const fetch = useCallback(() => {
         store.executeFetch(context, configRef.current.fetch);
     }, [context, store]);
 
@@ -44,6 +43,29 @@ export function useCrud<T extends Item = Item, C extends Record<string, any> = a
     const remove = useCallback((item: T) => {
         store.executeRemove(item, context, configRef.current.remove);
     }, [context, store]);
+
+    return {
+        fetch,
+        create,
+        update,
+        remove,
+    }
+}
+
+export function useCrud<T extends Item = Item, C extends Record<string, any> = any>(config: CrudConfig<T, C>) {
+    const store = useMemo<Store<T>>(() => Store.createStore({ id: config.id, initialData: [], caching: config.caching }), [config.caching, config.id]);
+    const {
+        fetch,
+        create,
+        update,
+        remove,
+    } = useCrudOperations(config);
+    const state = useSyncExternalStore(store.subscribe, store.getSnapshot);
+
+    useEffect(() => {
+        fetch();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [config.id]);
 
 
     return useMemo(() => ({
