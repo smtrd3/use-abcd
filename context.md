@@ -1,0 +1,2 @@
+- For running tests use `bun run test -- file`, don't sue buns built in test runner
+- For mocking apis use msw which is already available
