@@ -29,7 +29,7 @@ bun add use-abcd
 ## Quick Example
 
 ```typescript
-import { useCrud } from "use-crud";
+import { useCrud } from "use-abcd";
 
 type Todo = {
   id: string;
@@ -87,6 +87,8 @@ function TodoList() {
   );
 }
 ```
+
+> **Note**: This is a single-file library with a focused scope. Please read the source code for a deeper understanding of its implementation and capabilities.
 
 ## License
 
