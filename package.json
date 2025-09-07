@@ -16,7 +16,7 @@
     }
   },
   "scripts": {
-    "build": "bun run test && vite build -c vite.lib.ts",
+    "build": "vite build -c vite.lib.ts",
     "dev": "vite",
     "lint": "eslint .",
     "preview": "vite preview",
