@@ -1,5 +1,6 @@
 {
   "name": "use-crud",
+  "description": "Simple react hook for CRUD type apps",
   "version": "0.0.0",
   "private": true,
   "type": "module",
