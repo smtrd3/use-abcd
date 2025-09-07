@@ -1,8 +1,10 @@
-# use-crud (alpha)
+# use-abcd (alpha)
 
 [![Build Status](https://github.com/smtrd3/common-state/workflows/CI/badge.svg)](https://github.com/smtrd3/common-state/actions)
 
-A powerful React hook for managing CRUD (Create, Read, Update, Delete) operations with optimistic updates, caching, and automatic state management.
+A powerful React hook for managing ABCD (or CRUD) operations with optimistic updates, caching, and automatic state management.
+
+> **Note on Package Name**: The package is published as `use-abcd` on npm due to naming availability, where ABCD stands for Add, Browse, Change, and Delete - which maps directly to the traditional CRUD (Create, Read, Update, Delete) operations. While the package name uses ABCD, all internal APIs and documentation use CRUD terminology for familiarity and consistency with common programming patterns.
 
 ## Features
 
@@ -17,11 +19,11 @@ A powerful React hook for managing CRUD (Create, Read, Update, Delete) operation
 ## Installation
 
 ```bash
-npm install use-crud
+npm install use-abcd
 # or
-yarn add use-crud
+yarn add use-abcd
 # or
-bun add use-crud
+bun add use-abcd
 ```
 
 ## Quick Example
