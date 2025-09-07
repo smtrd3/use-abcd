@@ -1,5 +1,7 @@
 # use-crud (alpha)
 
+[![Build Status](https://github.com/smtrd3/common-state/workflows/CI/badge.svg)](https://github.com/smtrd3/common-state/actions)
+
 A powerful React hook for managing CRUD (Create, Read, Update, Delete) operations with optimistic updates, caching, and automatic state management.
 
 ## Features
