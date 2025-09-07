@@ -60,7 +60,7 @@ describe("useCrud - create operation", () => {
       id: "new-Test Item",
       name: "Test Item",
     });
-    expect(result.current.items[0].state).toBe("complete");
+    expect(result.current.items[0].state).toBe("idle");
   });
 
   it("should handle creation errors", async () => {
@@ -90,7 +90,7 @@ describe("useCrud - create operation", () => {
 
     expect(result.current.items).toHaveLength(1);
     expect(result.current.items[0].data.name).toBe("Local Item");
-    expect(result.current.items[0].state).toBe("complete");
+    expect(result.current.items[0].state).toBe("idle");
   });
 
   it("should handle network errors", async () => {

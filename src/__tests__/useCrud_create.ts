@@ -2,7 +2,7 @@ import { renderHook, act, waitFor } from "@testing-library/react";
 import { describe, it, expect, beforeAll, afterAll, afterEach } from "vitest";
 import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
-import { useCrud, useCrudOperations, type Item } from "../useCrud";
+import { useCrud, type Item } from "../useCrud";
 
 interface TestItem extends Item {
   name: string;
@@ -11,7 +11,7 @@ interface TestItem extends Item {
 // MSW server setup
 const server = setupServer(
   http.post("/api/items", async ({ request }) => {
-    const body = await request.json();
+    const body = (await request.json()) as { name: string };
     return HttpResponse.json({ id: `new-${body.name}` });
   })
 );
@@ -60,14 +60,14 @@ describe("useCrud - create operation", () => {
       id: "new-Test Item",
       name: "Test Item",
     });
-    expect(result.current.items[0].state).toBe("complete");
+    expect(result.current.items[0].state).toBe("idle");
   });
 
   it("should handle optimistic creation", async () => {
     const { result } = setupHook();
 
     await act(async () => {
-      result.current.create({ name: "Optimistic Item" }, true);
+      result.current.create({ name: "Optimistic Item" });
     });
 
     // Check immediate optimistic update
@@ -78,7 +78,7 @@ describe("useCrud - create operation", () => {
 
     // Wait for async update to complete
     await waitFor(() => {
-      expect(result.current.items[0].state).toBe("complete");
+      expect(result.current.items[0].state).toBe("idle");
     });
 
     // Verify final state after backend response
@@ -113,7 +113,7 @@ describe("useCrud - create operation", () => {
 
     expect(result.current.items).toHaveLength(1);
     expect(result.current.items[0].data.name).toBe("Local Item");
-    expect(result.current.items[0].state).toBe("complete");
+    expect(result.current.items[0].state).toBe("idle");
   });
 
   it("should handle network errors", async () => {

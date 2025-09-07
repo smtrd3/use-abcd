@@ -2,7 +2,7 @@ import { useCrud } from "../useCrud";
 import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
 import { renderHook, waitFor } from "@testing-library/react";
-import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, afterEach } from "vitest";
 
 const mockItems = [
   { id: "1", name: "Item 1" },
@@ -60,7 +60,7 @@ describe("useCrud - fetch operations", () => {
     // Verify item structure
     const firstItem = result.current.items[0];
     expect(firstItem.data).toEqual(mockItems[0]);
-    expect(firstItem.state).toBe("complete");
+    expect(firstItem.state).toBe("idle");
     expect(firstItem.optimistic).toBe(false);
     expect(firstItem.errors).toHaveLength(0);
   });

@@ -8,7 +8,7 @@ export type Item = { id: string } & Record<string, unknown>;
 
 export type ItemWithState<T extends Item = Item> = {
   data: T;
-  state: "create" | "update" | "delete" | "complete" | "error";
+  state: "create" | "update" | "delete" | "idle" | "error";
   optimistic: boolean;
   errors: string[];
   input?: T;
@@ -50,6 +50,14 @@ export type CreateStoreConfig<T extends Item = Item> = {
 };
 
 type CachedItem = { data: unknown; ts: number };
+
+export function customLog(title: string = "log", ...messages: any[]) {
+  if (import.meta.env.DEV) {
+    console.groupCollapsed("[useCrud] " + title);
+    console.log(...messages);
+    console.groupEnd();
+  }
+}
 
 /**
  * Cache implementation for storing and managing fetch results
@@ -94,7 +102,7 @@ export class FetchCache {
     if (this.capacity > 0) {
       this.storage.set(id, { data: item, ts: Date.now() });
     }
-    if (this.storage.capacity > this.capacity) {
+    if (this.storage.size > this.capacity) {
       const delKey = [...this.storage.keys()].at(0);
       this.storage.delete(delKey);
     }
@@ -119,10 +127,16 @@ export class FetchCache {
 
 function delay(ms: number, signal: AbortSignal) {
   return new Promise((resolve, reject) => {
-    signal.addEventListener("abort", () => {
+    function onAbort() {
+      customLog("delay", "Fetch operation canceled due to debounce re-entry");
       reject("DEBOUNCE_CANCELLED");
-    });
-    setTimeout(resolve, ms);
+    }
+
+    signal.addEventListener("abort", onAbort);
+    setTimeout(() => {
+      signal.removeEventListener("abort", onAbort);
+      resolve("");
+    }, ms);
   });
 }
 
@@ -172,7 +186,7 @@ class Store<T extends Item = Item> {
     items.forEach((item) => {
       map.set(item.id, {
         data: item,
-        state: "complete",
+        state: "idle",
         optimistic: false,
         errors: [],
       });
@@ -215,7 +229,6 @@ class Store<T extends Item = Item> {
   };
 
   private startFetch = () => {
-    console.log("Start fetch");
     this.fetchController.abort();
     this.state = create(this.state, (state) => {
       state.fetchState.isLoading = true;
@@ -225,7 +238,6 @@ class Store<T extends Item = Item> {
   };
 
   private endFetch = (errors: string[] = []) => {
-    console.log("End fetch");
     this.state = create(this.state, (state) => {
       state.fetchState.isLoading = false;
       state.fetchState.errors = errors;
@@ -245,6 +257,7 @@ class Store<T extends Item = Item> {
       if (fetchFn) {
         response = (await this.fetchCache.withCache(cacheKey, async () => {
           await delay(this.options.debounce || 0, this.fetchController.signal);
+          customLog("fetch execution", "Executing fetch function");
           return fetchFn({
             signal: this.fetchController.signal,
             context,
@@ -265,6 +278,7 @@ class Store<T extends Item = Item> {
       }
 
       if ((ex as Error).name === "AbortError") {
+        customLog("fetch exception", "Fetch operation was cancelled by client");
         this.endFetch();
         return;
       }
@@ -277,17 +291,33 @@ class Store<T extends Item = Item> {
   };
 
   executeRemove = async (input: T, context: unknown, save?: TransitionFn<T>) => {
-    const controller = this.startTransition({ id: input.id, input, state: "delete" });
+    const controller = this.startTransition({
+      id: input.id,
+      input,
+      state: "delete",
+    });
 
     if (save) {
       try {
         await save(input, { signal: controller.signal, context });
         this.remove(input.id);
-        this.startTransition({ id: input.id, state: "complete" });
+        this.startTransition({ id: input.id, state: "idle" });
       } catch (ex) {
         if ((ex as Error).name === "AbortError") {
-          this.startTransition({ id: input.id, state: "complete" });
-          return;
+          // On abort, first clean up any existing operation
+          this.controllers.delete(input.id);
+
+          // Then reset state to idle
+          this.state = create(this.state, (draft) => {
+            const item = draft.items.get(input.id);
+            if (item) {
+              item.state = "idle";
+              item.input = undefined;
+              item.errors = [];
+            }
+          });
+          this.notify();
+          throw ex; // Re-throw to signal the operation was aborted
         }
 
         this.startTransition({
@@ -299,7 +329,7 @@ class Store<T extends Item = Item> {
       }
     } else {
       this.remove(input.id);
-      this.startTransition({ id: input.id, state: "complete" });
+      this.startTransition({ id: input.id, state: "idle" });
     }
 
     this.fetchCache.remove(this.getCacheKey(context));
@@ -331,11 +361,11 @@ class Store<T extends Item = Item> {
         try {
           await save(updatedItem, { signal: controller.signal, context });
           this.updateItem(updatedItem);
-          this.startTransition({ id: itemId, state: "complete" });
+          this.startTransition({ id: itemId, state: "idle" });
         } catch (ex: unknown) {
           if ((ex as Error).name === "AbortError") {
             this.updateItem(item.data); // revert to original item
-            this.startTransition({ id: updatedItem.id, state: "complete" });
+            this.startTransition({ id: updatedItem.id, state: "idle" });
             return;
           }
 
@@ -348,7 +378,7 @@ class Store<T extends Item = Item> {
         }
       } else {
         this.updateItem(updatedItem);
-        this.startTransition({ id: itemId, state: "complete" });
+        this.startTransition({ id: itemId, state: "idle" });
       }
 
       this.fetchCache.remove(this.getCacheKey(context));
@@ -411,15 +441,15 @@ class Store<T extends Item = Item> {
             draftState.items = newItems as any;
           });
 
-          this.startTransition({ id: savedId, state: "complete" });
+          this.startTransition({ id: savedId, state: "idle" });
         } else {
           append(savedId);
-          this.startTransition({ id: savedId, state: "complete" });
+          this.startTransition({ id: savedId, state: "idle" });
         }
       } catch (ex) {
         if ((ex as Error).name === "AbortError") {
           this.remove(randomId);
-          this.startTransition({ id: input.id, state: "complete" });
+          this.startTransition({ id: input.id, state: "idle" });
           return;
         }
 
@@ -432,7 +462,7 @@ class Store<T extends Item = Item> {
       }
     } else {
       append();
-      this.startTransition({ id: randomId, state: "complete" });
+      this.startTransition({ id: randomId, state: "idle" });
     }
 
     this.fetchCache.remove(this.getCacheKey(context));
@@ -459,8 +489,8 @@ class Store<T extends Item = Item> {
         const draftItem = draft.items.get(id) as ItemWithState<T>;
         draftItem.state = state;
         draftItem.optimistic = isOptimistic;
-        draftItem.errors = state === "complete" ? [] : errors;
-        draftItem.input = state == "complete" ? undefined : input;
+        draftItem.errors = state === "idle" ? [] : errors;
+        draftItem.input = state == "idle" ? undefined : input;
       });
       this.notify();
     }
@@ -505,6 +535,17 @@ class Store<T extends Item = Item> {
   }
 }
 
+export const useMemoDeepEquals = <T>(value: T) => {
+  const valueRef = useRef(value);
+
+  return useMemo(() => {
+    if (!isEqual(value, valueRef.current)) {
+      valueRef.current = value;
+    }
+    return valueRef.current;
+  }, [value]);
+};
+
 export type CrudConfig<T extends Item = Item, C = any> = {
   id: string;
   context: C;
@@ -531,13 +572,7 @@ export function useCrudOperations<T extends Item = Item, C extends Record<string
   config: CrudConfig<T, C>
 ) {
   const configRef = useRef(config);
-  const context = useMemo(() => {
-    if (!isEqual(config.context, configRef.current.context)) {
-      configRef.current = config;
-    }
-    return configRef.current.context;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [config.id, config.context]);
+  const memoContext = useMemoDeepEquals(config.context);
 
   const getStore = useCallback(() => {
     const store = Store.instances.get(config.id);
@@ -549,37 +584,36 @@ export function useCrudOperations<T extends Item = Item, C extends Record<string
 
   const fetch = useCallback(() => {
     const store = getStore();
-    store?.executeFetch(context, configRef.current.fetch);
-  }, [context, getStore]);
+    store?.executeFetch(memoContext, configRef.current.fetch);
+  }, [memoContext, getStore]);
 
   const refetch = useCallback(() => {
     const store = getStore();
-    store.clearFetchCache(context);
-    store.executeFetch(context, configRef.current.fetch);
-  }, [context, getStore]);
+    store.clearFetchCache(memoContext);
+    store.executeFetch(memoContext, configRef.current.fetch);
+  }, [memoContext, getStore]);
 
   const create = useCallback(
-    (item: Omit<T, "id">, isOptimistic = false) => {
+    (item: Omit<T, "id">) => {
       const store = getStore();
-      store.executeCreate(context, item as T, configRef.current.create, isOptimistic);
+      store.executeCreate(memoContext, item as T, configRef.current.create);
     },
-    [context, getStore]
+    [memoContext, getStore]
   );
-
   const update = useCallback(
     (item: T, updater: Updater<T>, isOptimistic = false) => {
       const store = getStore();
-      store.executeUpdate(item, context, updater, configRef.current.update, isOptimistic);
+      store.executeUpdate(item, memoContext, updater, configRef.current.update, isOptimistic);
     },
-    [context, getStore]
+    [memoContext, getStore]
   );
 
   const remove = useCallback(
     (item: T) => {
       const store = getStore();
-      store.executeRemove(item, context, configRef.current.remove);
+      store.executeRemove(item, memoContext, configRef.current.remove);
     },
-    [context, getStore]
+    [memoContext, getStore]
   );
 
   const cancelFetch = useCallback(() => {
@@ -629,14 +663,14 @@ export function useCrud<T extends Item = Item, C extends Record<string, any> = a
       }),
     [config]
   );
-  const { refetch, create, update, remove, cancelOperation, cancelFetch } =
-    useCrudOperations(config);
+  const { fetch, create, update, remove, cancelOperation, cancelFetch } = useCrudOperations(config);
   const state = useSyncExternalStore(store.subscribe, store.getSnapshot, config.getServerSnapshot);
+  const memoContext = useMemoDeepEquals(config.context);
 
   useEffect(() => {
-    refetch();
+    fetch();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [config.id, config.context]);
+  }, [config.id, memoContext]);
 
   const items = useMemo(() => {
     return map([...state.items.values()], (item) => ({
@@ -645,7 +679,7 @@ export function useCrud<T extends Item = Item, C extends Record<string, any> = a
     }));
   }, [state.items]);
 
-  return useMemo(
+  const snapshot = useMemo(
     () => ({
       itemsById: state.items,
       items,
@@ -672,4 +706,7 @@ export function useCrud<T extends Item = Item, C extends Record<string, any> = a
       cancelOperation,
     ]
   );
+
+  customLog("snapshot", snapshot);
+  return snapshot;
 }

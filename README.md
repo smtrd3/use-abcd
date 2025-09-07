@@ -1,69 +1,89 @@
-# React + TypeScript + Vite
+# use-crud (alpha)
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A powerful React hook for managing CRUD (Create, Read, Update, Delete) operations with optimistic updates, caching, and automatic state management.
 
-Currently, two official plugins are available:
+## Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- 🔄 Automatic state management
+- ⚡ Optimistic updates
+- 🗄️ Built-in caching
+- 🎯 Type-safe
+- 🚫 Automatic error handling
+- ⏳ Debounce support
+- 🔍 Request cancellation
 
-## Expanding the ESLint configuration
+## Installation
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default tseslint.config([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      ...tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      ...tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      ...tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install use-crud
+# or
+yarn add use-crud
+# or
+bun add use-crud
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Quick Example
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+```typescript
+import { useCrud } from "use-crud";
 
-export default tseslint.config([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
+type Todo = {
+  id: string;
+  title: string;
+  completed: boolean;
+};
+
+function TodoList() {
+  const { items, isLoading, create, update, remove } = useCrud<Todo>({
+    id: "todos",
+    context: {},
+    // Configure caching (optional)
+    caching: {
+      capacity: 10,
+      age: 60000, // 1 minute
     },
-  },
-])
+    // Fetch todos from API
+    fetch: async ({ signal }) => {
+      const response = await fetch("https://api.example.com/todos", { signal });
+      const items = await response.json();
+      return { items, metadata: {} };
+    },
+    // Create new todo
+    create: async (todo) => {
+      const response = await fetch("https://api.example.com/todos", {
+        method: "POST",
+        body: JSON.stringify(todo),
+      });
+      const { id } = await response.json();
+      return { id };
+    },
+  });
+
+  if (isLoading) return <div>Loading...</div>;
+
+  return (
+    <div>
+      <button onClick={() => create({ title: "New Todo", completed: false })}>Add Todo</button>
+      {items.map((item) => (
+        <div key={item.data.id}>
+          <span>{item.data.title}</span>
+          <button
+            onClick={() =>
+              update(item.data, (draft) => {
+                draft.completed = !draft.completed;
+              })
+            }
+          >
+            Toggle
+          </button>
+          <button onClick={() => remove(item.data)}>Delete</button>
+        </div>
+      ))}
+    </div>
+  );
+}
 ```
+
+## License
+
+MIT
