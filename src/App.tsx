@@ -24,9 +24,10 @@ function App() {
       items: [{ id: "main", value: 0 }],
       metadata: {},
     }),
+    // persist data
     update: async (data: Counter) => ({
       ...data,
-      value: Math.max(0, data.value), // Prevent negative values
+      value: Math.max(0, data.value),
     }),
   });
 
