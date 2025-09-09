@@ -166,7 +166,6 @@ describe("useCrud - fetch operations", () => {
 
   it("should debounce fetch requests", async () => {
     let fetchCount = 0;
-    console.log("Hello");
     const config = {
       ...defaultConfig,
       debounce: 300,
@@ -178,16 +177,9 @@ describe("useCrud - fetch operations", () => {
       },
     };
 
-    const { result, rerender } = renderHook(
-      (context) =>
-        useCrud({
-          ...config,
-          context,
-        }),
-      {
-        initialProps: { page: 1 },
-      }
-    );
+    const { result, rerender } = renderHook((context) => useCrud({ ...config, context }), {
+      initialProps: { page: 1 },
+    });
 
     // Trigger multiple rerenders in quick succession
     rerender({ page: 2 });

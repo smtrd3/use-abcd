@@ -51,14 +51,6 @@ export type CreateStoreConfig<T extends Item = Item> = {
 
 type CachedItem = { data: unknown; ts: number };
 
-export function customLog(title: string = "log", ...messages: any[]) {
-  if (import.meta.env.DEV) {
-    console.groupCollapsed("[useCrud] " + title);
-    console.log(...messages);
-    console.groupEnd();
-  }
-}
-
 /**
  * Cache implementation for storing and managing fetch results
  * with configurable age and capacity limits.
@@ -125,21 +117,6 @@ export class FetchCache {
   };
 }
 
-function delay(ms: number, signal: AbortSignal) {
-  return new Promise((resolve, reject) => {
-    function onAbort() {
-      customLog("delay", "Fetch operation canceled due to debounce re-entry");
-      reject("DEBOUNCE_CANCELLED");
-    }
-
-    signal.addEventListener("abort", onAbort);
-    setTimeout(() => {
-      signal.removeEventListener("abort", onAbort);
-      resolve("");
-    }, ms);
-  });
-}
-
 /**
  * Core state management store for CRUD operations.
  * Handles data fetching, caching, and state transitions for items.
@@ -173,6 +150,29 @@ class Store<T extends Item = Item> {
   private getCacheKey(context: unknown) {
     return `[${this.id}, ${JSON.stringify(context)}]`;
   }
+
+  customLog = (title: string = "log", ...messages: any[]) => {
+    if (import.meta.env.DEV) {
+      console.groupCollapsed(`[useCrud]#${this.id}` + title);
+      console.log(...messages);
+      console.groupEnd();
+    }
+  };
+
+  wait = (ms: number, signal: AbortSignal) => {
+    return new Promise((resolve, reject) => {
+      const onAbort = () => {
+        this.customLog("delay", "Fetch operation canceled due to debounce re-entry");
+        reject("DEBOUNCE_CANCELLED");
+      };
+
+      signal.addEventListener("abort", onAbort);
+      setTimeout(() => {
+        signal.removeEventListener("abort", onAbort);
+        resolve("");
+      }, ms);
+    });
+  };
 
   private batch = (fn: () => void) => {
     this.batched = true;
@@ -256,8 +256,8 @@ class Store<T extends Item = Item> {
 
       if (fetchFn) {
         response = (await this.fetchCache.withCache(cacheKey, async () => {
-          await delay(this.options.debounce || 0, this.fetchController.signal);
-          customLog("fetch execution", "Executing fetch function");
+          await this.wait(this.options.debounce || 0, this.fetchController.signal);
+          this.customLog("fetch execution", "Executing fetch function");
           return fetchFn({
             signal: this.fetchController.signal,
             context,
@@ -278,7 +278,7 @@ class Store<T extends Item = Item> {
       }
 
       if ((ex as Error).name === "AbortError") {
-        customLog("fetch exception", "Fetch operation was cancelled by client");
+        this.customLog("fetch exception", "Fetch operation was cancelled by client");
         this.endFetch();
         return;
       }
@@ -707,6 +707,6 @@ export function useCrud<T extends Item = Item, C extends Record<string, any> = a
     ]
   );
 
-  customLog("snapshot", snapshot);
+  store.customLog("snapshot", snapshot);
   return snapshot;
 }
