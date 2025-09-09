@@ -4,7 +4,7 @@
   "repository": {
     "url": "https://github.com/smtrd3/use-abcd"
   },
-  "version": "0.0.2",
+  "version": "0.0.1",
   "type": "module",
   "files": [
     "dist"
@@ -24,7 +24,8 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest --run",
-    "test:cov": "vitest run --coverage"
+    "test:cov": "vitest run --coverage",
+    "release": "bun run lint && bun run test && bun run build && npm publish"
   },
   "dependencies": {
     "lodash-es": "^4.17.21",
