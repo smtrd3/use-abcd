@@ -64,7 +64,7 @@ describe("useCrud - remove operation", () => {
       expect(result.current.items).toHaveLength(2);
     });
 
-    const itemToRemove = result.current.items[0].data;
+    const itemToRemove = result.current.items[0];
 
     await act(async () => {
       result.current.remove(itemToRemove);
@@ -90,7 +90,7 @@ describe("useCrud - remove operation", () => {
       expect(result.current.items).toHaveLength(2);
     });
 
-    const itemToRemove = result.current.items[0].data;
+    const itemToRemove = result.current.items[0];
 
     await act(async () => {
       result.current.remove(itemToRemove);
@@ -111,7 +111,7 @@ describe("useCrud - remove operation", () => {
       expect(result.current.items).toHaveLength(2);
     });
 
-    const itemToRemove = result.current.items[0].data;
+    const itemToRemove = result.current.items[0];
 
     await act(async () => {
       result.current.remove(itemToRemove);
@@ -131,7 +131,7 @@ describe("useCrud - remove operation", () => {
       expect(result.current.items).toHaveLength(2);
     });
 
-    const itemToRemove = result.current.items[0].data;
+    const itemToRemove = result.current.items[0];
     const otherItem = result.current.items[1].data;
 
     await act(async () => {
@@ -216,7 +216,7 @@ describe("useCrud - remove operation", () => {
     expect(fetchCount).toBe(2); // Using cache
 
     // Remove an item from page 1
-    const itemToRemove = result.current.items[0].data;
+    const itemToRemove = result.current.items[0];
     await act(async () => {
       result.current.remove(itemToRemove);
     });

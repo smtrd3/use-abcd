@@ -63,7 +63,7 @@ describe("useCrud - update operation", () => {
       expect(result.current.items).toHaveLength(2);
     });
 
-    const itemToUpdate = result.current.items[0].data;
+    const itemToUpdate = result.current.items[0];
 
     await act(async () => {
       result.current.update(itemToUpdate, (draft) => {
@@ -89,7 +89,7 @@ describe("useCrud - update operation", () => {
       expect(result.current.items).toHaveLength(2);
     });
 
-    const itemToUpdate = result.current.items[0].data;
+    const itemToUpdate = result.current.items[0];
 
     act(() => {
       result.current.update(
@@ -134,7 +134,7 @@ describe("useCrud - update operation", () => {
       expect(result.current.items).toHaveLength(2);
     });
 
-    const itemToUpdate = result.current.items[0].data;
+    const itemToUpdate = result.current.items[0];
 
     await act(async () => {
       result.current.update(itemToUpdate, (draft) => {
@@ -155,7 +155,7 @@ describe("useCrud - update operation", () => {
       expect(result.current.items).toHaveLength(2);
     });
 
-    const itemToUpdate = result.current.items[0].data;
+    const itemToUpdate = result.current.items[0];
 
     await act(async () => {
       result.current.update(itemToUpdate, (draft) => {
@@ -164,7 +164,7 @@ describe("useCrud - update operation", () => {
     });
 
     expect(result.current.items[0].data.name).toBe("Local Update");
-    expect(result.current.items[0].state).toBe("idle");
+    expect(result.current.items[0].state).toBe("changed");
   });
 
   it("should handle cancellation of update operation", async () => {
@@ -184,7 +184,7 @@ describe("useCrud - update operation", () => {
     });
 
     const originalItem = { ...result.current.items[0].data };
-    const itemToUpdate = result.current.items[0].data;
+    const itemToUpdate = result.current.items[0];
 
     // Start update with optimistic update
     act(() => {
@@ -222,8 +222,8 @@ describe("useCrud - update operation", () => {
       expect(result.current.items).toHaveLength(2);
     });
 
-    const itemToUpdate = result.current.items[0].data;
-    const otherItem = result.current.items[1].data;
+    const itemToUpdate = result.current.items[0];
+    const otherItem = result.current.items[1];
 
     await act(async () => {
       result.current.update(itemToUpdate, (draft) => {
@@ -233,7 +233,7 @@ describe("useCrud - update operation", () => {
 
     // Check that other item remained unchanged
     const unchangedItem = result.current.items.find((item) => item.data.id === otherItem.id);
-    expect(unchangedItem?.data).toEqual(otherItem);
+    expect(unchangedItem?.data).toEqual(otherItem.data);
     expect(unchangedItem?.state).toBe("idle");
   });
 });

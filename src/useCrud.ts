@@ -1,17 +1,19 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { isEqual, map, set, size, some } from "lodash-es";
+import { identity, isEqual, map, set, size, some } from "lodash-es";
 import { create } from "mutative";
 import { nanoid } from "nanoid";
 import { useRef, useMemo, useCallback, useSyncExternalStore, useEffect } from "react";
 
-export type Item = { id: string } & Record<string, unknown>;
+export type Item = { id: string } & Record<string, any>;
+
+export type TransitionStates = "create" | "update" | "delete" | "idle" | "error" | "changed";
 
 export type ItemWithState<T extends Item = Item> = {
   data: T;
-  state: "create" | "update" | "delete" | "idle" | "error";
+  state: TransitionStates;
   optimistic: boolean;
   errors: string[];
-  input?: T;
+  action?: [TransitionStates, T];
 };
 
 export type QueryOption = {
@@ -290,29 +292,29 @@ class Store<T extends Item = Item> {
     }
   };
 
-  executeRemove = async (input: T, context: unknown, save?: TransitionFn<T>) => {
+  executeRemove = async (input: ItemWithState<T>, context: unknown, save?: TransitionFn<T>) => {
     const controller = this.startTransition({
-      id: input.id,
-      input,
+      id: input.data.id,
+      input: input.data,
       state: "delete",
     });
 
     if (save) {
       try {
-        await save(input, { signal: controller.signal, context });
-        this.remove(input.id);
-        this.startTransition({ id: input.id, state: "idle" });
+        await save(input.data, { signal: controller.signal, context });
+        this.remove(input.data.id);
+        this.startTransition({ id: input.data.id, state: "idle" });
       } catch (ex) {
         if ((ex as Error).name === "AbortError") {
           // On abort, first clean up any existing operation
-          this.controllers.delete(input.id);
+          this.controllers.delete(input.data.id);
 
           // Then reset state to idle
           this.state = create(this.state, (draft) => {
-            const item = draft.items.get(input.id);
+            const item = draft.items.get(input.data.id);
             if (item) {
               item.state = "idle";
-              item.input = undefined;
+              item.action = undefined;
               item.errors = [];
             }
           });
@@ -321,28 +323,28 @@ class Store<T extends Item = Item> {
         }
 
         this.startTransition({
-          id: input.id,
-          input,
+          id: input.data.id,
+          input: input.data,
           state: "delete",
           errors: [(ex as Error).message],
         });
       }
     } else {
-      this.remove(input.id);
-      this.startTransition({ id: input.id, state: "idle" });
+      this.remove(input.data.id);
+      this.startTransition({ id: input.data.id, state: "idle" });
     }
 
     this.fetchCache.remove(this.getCacheKey(context));
   };
 
   executeUpdate = async (
-    item: T,
+    item: ItemWithState<T>,
     context: unknown,
     updater: Updater<T>,
     save?: TransitionFn<T>,
     isOptimistic = false
   ) => {
-    const itemId = item.id;
+    const itemId = item.data.id;
     if (this.state.items.has(itemId)) {
       const item = this.state.items.get(itemId) as ItemWithState<T>;
       const updatedItem = create(item.data, updater);
@@ -378,7 +380,7 @@ class Store<T extends Item = Item> {
         }
       } else {
         this.updateItem(updatedItem);
-        this.startTransition({ id: itemId, state: "idle" });
+        this.startTransition({ id: itemId, state: !save ? "changed" : "idle" });
       }
 
       this.fetchCache.remove(this.getCacheKey(context));
@@ -396,7 +398,7 @@ class Store<T extends Item = Item> {
           errors: [],
           optimistic: true, // always true for create
           state: "create",
-          input: inputWithId,
+          action: ["create", inputWithId],
         };
 
         draftState.items.set(id || randomId, itemWithState as any);
@@ -490,7 +492,7 @@ class Store<T extends Item = Item> {
         draftItem.state = state;
         draftItem.optimistic = isOptimistic;
         draftItem.errors = state === "idle" ? [] : errors;
-        draftItem.input = state == "idle" ? undefined : input;
+        draftItem.action = state == "idle" ? undefined : [state, input];
       });
       this.notify();
     }
@@ -600,8 +602,30 @@ export function useCrudOperations<T extends Item = Item, C extends Record<string
     },
     [memoContext, getStore]
   );
+
+  const change = useCallback(
+    (item: ItemWithState<T>, updater: Updater<T>) => {
+      const store = getStore();
+      store.executeUpdate(item, memoContext, updater, undefined, true);
+    },
+    [memoContext, getStore]
+  );
+
+  const save = useCallback(
+    (item: ItemWithState<T>) => {
+      const store = getStore();
+      const currentItem = store.getSnapshot().items.get(item.data.id);
+      if (currentItem && configRef.current.update) {
+        store.executeUpdate(item, memoContext, identity, configRef.current.update);
+      } else {
+        store.customLog("save", "Non existent item or update function does not exist in config");
+      }
+    },
+    [memoContext, getStore]
+  );
+
   const update = useCallback(
-    (item: T, updater: Updater<T>, isOptimistic = false) => {
+    (item: ItemWithState<T>, updater: Updater<T>, isOptimistic = false) => {
       const store = getStore();
       store.executeUpdate(item, memoContext, updater, configRef.current.update, isOptimistic);
     },
@@ -609,9 +633,42 @@ export function useCrudOperations<T extends Item = Item, C extends Record<string
   );
 
   const remove = useCallback(
-    (item: T) => {
+    (item: ItemWithState<T>) => {
       const store = getStore();
       store.executeRemove(item, memoContext, configRef.current.remove);
+    },
+    [memoContext, getStore]
+  );
+
+  const retry = useCallback(
+    (item: ItemWithState<T>) => {
+      const store = getStore();
+      if (item.action) {
+        const [state, input] = item.action;
+
+        switch (state) {
+          case "create":
+            store.executeCreate(memoContext, input, configRef.current.create);
+            break;
+          case "delete":
+            store.executeRemove(
+              { data: input, state: "idle", errors: [], optimistic: false },
+              memoContext,
+              configRef.current.remove
+            );
+            break;
+          case "update":
+            store.executeUpdate(
+              { data: input, state: "idle", optimistic: false, errors: [] },
+              memoContext,
+              () => input,
+              configRef.current.update
+            );
+            break;
+        }
+
+        store.executeRemove(item, memoContext, configRef.current.remove);
+      }
     },
     [memoContext, getStore]
   );
@@ -636,6 +693,9 @@ export function useCrudOperations<T extends Item = Item, C extends Record<string
     refetch,
     create,
     update,
+    change,
+    save,
+    retry,
     remove,
     cancelFetch,
     cancelOperation,
@@ -661,9 +721,10 @@ export function useCrud<T extends Item = Item, C extends Record<string, any> = a
         caching: config.caching,
         debounce: config.debounce,
       }),
-    [config]
+    [config.id, config.caching, config.debounce]
   );
-  const { fetch, create, update, remove, cancelOperation, cancelFetch } = useCrudOperations(config);
+  const { fetch, create, update, change, save, retry, remove, cancelOperation, cancelFetch } =
+    useCrudOperations(config);
   const state = useSyncExternalStore(store.subscribe, store.getSnapshot, config.getServerSnapshot);
   const memoContext = useMemoDeepEquals(config.context);
 
@@ -689,6 +750,9 @@ export function useCrud<T extends Item = Item, C extends Record<string, any> = a
       errors: state.fetchState.errors,
       create,
       update,
+      change,
+      retry,
+      save,
       remove,
       cancelFetch,
       cancelOperation,
@@ -701,6 +765,9 @@ export function useCrud<T extends Item = Item, C extends Record<string, any> = a
       items,
       create,
       update,
+      retry,
+      change,
+      save,
       remove,
       cancelFetch,
       cancelOperation,

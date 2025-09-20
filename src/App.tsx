@@ -1,66 +1,28 @@
-import { useCrud } from "./useCrud";
+import { useCallback } from "react";
+import Post from "./examples/Post";
+import { Todo } from "./examples/Todo";
+import "./index.css";
+import { Switch, Route, Link } from "wouter";
 
-interface Counter {
-  id: string;
-  value: number;
-  [key: string]: unknown;
-}
-
-/**
- * A simple counter example using useCrud hook
- * - Shows basic state management
- * - Demonstrates optimistic updates
- * - Includes data validation (no negative values)
- */
 function App() {
-  const { items, update, isLoading } = useCrud<Counter>({
-    id: "counter",
-    context: {},
-    caching: {
-      capacity: 1,
-      age: 1000 * 60, // 1 minute
-    },
-    fetch: async () => ({
-      items: [{ id: "main", value: 0 }],
-      metadata: {},
-    }),
-    // persist data
-    update: async (data: Counter) => ({
-      ...data,
-      value: Math.max(0, data.value),
-    }),
-  });
-
-  const counter = items[0]?.data;
-
-  if (isLoading || !counter) {
-    return <div>Loading...</div>;
-  }
+  const active = useCallback((active: boolean) => {
+    return active ? "underline" : "";
+  }, []);
 
   return (
-    <div style={{ textAlign: "center", padding: "20px" }}>
-      <h1 style={{ fontSize: "48px" }}>{counter.value}</h1>
-      <div style={{ display: "flex", gap: "10px", justifyContent: "center" }}>
-        <button
-          onClick={() =>
-            update(counter, (draft) => {
-              draft.value--;
-            })
-          }
-          disabled={counter.value === 0}
-        >
-          -
-        </button>
-        <button
-          onClick={() =>
-            update(counter, (draft) => {
-              draft.value++;
-            })
-          }
-        >
-          +
-        </button>
-      </div>
+    <div>
+      <nav className="flex gap-2 p-2">
+        <Link className={active} to="/">
+          Blog
+        </Link>
+        <Link className={active} to="/2">
+          Todo
+        </Link>
+      </nav>
+      <Switch>
+        <Route path="/2" component={Todo} />
+        <Route path="/" component={Post} />
+      </Switch>
     </div>
   );
 }
