@@ -686,8 +686,6 @@ export function useCrudOperations<T extends Item = Item, C extends Record<string
     [getStore]
   );
 
-  //   implement re-try last operation
-
   return {
     fetch,
     refetch,
@@ -733,12 +731,7 @@ export function useCrud<T extends Item = Item, C extends Record<string, any> = a
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [config.id, memoContext]);
 
-  const items = useMemo(() => {
-    return map([...state.items.values()], (item) => ({
-      ...item,
-      id: item.data.id,
-    }));
-  }, [state.items]);
+  const items = useMemo(() => [...state.items.values()], [state.items]);
 
   const snapshot = useMemo(
     () => ({

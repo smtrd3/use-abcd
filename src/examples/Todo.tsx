@@ -1,5 +1,5 @@
 import React, { useCallback } from "react";
-import { useCrud, useCrudOperations, type CrudConfig, type ItemWithState } from "../useCrud";
+import { useCrud, type CrudConfig, type ItemWithState, type Updater } from "../useCrud";
 import { map } from "lodash-es";
 
 type Todo = {
@@ -21,19 +21,22 @@ const TodoCrud: CrudConfig<Todo> = {
     });
     return {
       items: [
-        { id: "one", description: "Shop for electronics", complete: false },
-        { id: "two", description: "Find time for learning", complete: false },
-        { id: "three", description: "Pick stocks", complete: false },
+        { id: "1", description: "Shop for electronics", complete: false },
+        { id: "2", description: "Find time for learning", complete: false },
+        { id: "3", description: "Pick stocks", complete: false },
+        { id: "4", description: "Pick stocks", complete: false },
       ],
       metadata: {},
     };
   },
 };
 
-const Item = React.memo((props: { item: ItemWithState<Todo> }) => {
-  const item = props.item;
-  const data = item.data;
-  const { update } = useCrudOperations(TodoCrud);
+const Item = React.memo(function Item(props: {
+  item: ItemWithState<Todo>;
+  update: (item: ItemWithState<Todo>, updater: Updater<Todo>, isOptimistic?: boolean) => void;
+}) {
+  const { update, item } = props;
+  const { data } = item;
 
   const markComplete = useCallback(() => {
     update(item, (draft) => {
@@ -54,8 +57,8 @@ const Item = React.memo((props: { item: ItemWithState<Todo> }) => {
   );
 });
 
-export function Todo() {
-  const { items, isLoading } = useCrud(TodoCrud);
+export const Todo = React.memo(function Todo() {
+  const { items, isLoading, update } = useCrud(TodoCrud);
 
   if (isLoading) {
     return <div>Loading...</div>;
@@ -64,8 +67,8 @@ export function Todo() {
   return (
     <div className="p-2">
       {map(items, (item) => (
-        <Item item={item} />
+        <Item key={item.data.id} item={item} update={update} />
       ))}
     </div>
   );
-}
+});

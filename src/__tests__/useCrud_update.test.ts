@@ -203,7 +203,7 @@ describe("useCrud - update operation", () => {
 
     // Cancel the operation
     act(() => {
-      result.current.cancelOperation(itemToUpdate.id);
+      result.current.cancelOperation(itemToUpdate.data.id);
     });
 
     // Wait for any async operations to complete
@@ -232,7 +232,7 @@ describe("useCrud - update operation", () => {
     });
 
     // Check that other item remained unchanged
-    const unchangedItem = result.current.items.find((item) => item.data.id === otherItem.id);
+    const unchangedItem = result.current.items.find((item) => item.data.id === otherItem.data.id);
     expect(unchangedItem?.data).toEqual(otherItem.data);
     expect(unchangedItem?.state).toBe("idle");
   });
