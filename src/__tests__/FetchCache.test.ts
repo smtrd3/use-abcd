@@ -1,5 +1,5 @@
-import { FetchCache } from "../useCrud";
 import { vi, describe, it, expect, beforeEach } from "vitest";
+import { FetchCache } from "../FetchCache";
 
 describe("FetchCache", () => {
   let cache: FetchCache;
