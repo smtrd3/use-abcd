@@ -29,14 +29,17 @@ bun add use-abcd
 ## Quick Example
 
 ```typescript
+// biome-ignore assist/source/organizeImports: useless
 import React, { useCallback } from "react";
-import { useCrud, type CrudConfig, type ItemWithState, type Updater } from "../useCrud";
+import { useCrud, useItemState, type CrudConfig, type ItemWithState } from "../useCrud";
 import { map } from "lodash-es";
+import { wait } from "../utils";
 
 type Todo = {
+  userId: string;
   id: string;
-  description: string;
-  complete: boolean;
+  title: string;
+  completed: boolean;
 };
 
 const TodoCrud: CrudConfig<Todo> = {
@@ -47,59 +50,72 @@ const TodoCrud: CrudConfig<Todo> = {
     capacity: 10,
   },
   fetch: async () => {
-    await new Promise((resolve) => {
-      setTimeout(resolve, 200);
-    });
     return {
-      items: [
-        { id: "1", description: "Shop for electronics", complete: false },
-        { id: "2", description: "Find time for learning", complete: false },
-        { id: "3", description: "Pick stocks", complete: false },
-        { id: "4", description: "Pick stocks", complete: false },
-      ],
+      items: await fetch("https://jsonplaceholder.typicode.com/todos")
+        .then((r) => r.json())
+        .then((items) => items.slice(0, 10)),
       metadata: {},
     };
   },
+  update: async (item, { signal }) => {
+    await wait(1000, signal);
+    return { id: item.id };
+  },
 };
 
-const Item = React.memo(function Item(props: {
-  item: ItemWithState<Todo>;
-  update: (item: ItemWithState<Todo>, updater: Updater<Todo>, isOptimistic?: boolean) => void;
-}) {
-  const { update, item } = props;
-  const { data } = item;
+const Item = React.memo(function Item(props: { item: ItemWithState<Todo> }) {
+  const { item } = props;
+  const [data, { update, states }] = useItemState("todo-crud", item);
 
   const markComplete = useCallback(() => {
-    update(item, (draft) => {
-      draft.complete = !item.data.complete;
+    update((draft) => {
+      draft.completed = !data.completed;
     });
-  }, [update, item]);
+  }, [update, data]);
 
   return (
-    <div key={data.id} className="flex gap-2 mb-1">
-      <div className={data.complete ? "line-through" : ""}>{data.description}</div>
-      <button
-        className="bg-blue-300 px-2 rounded active:bg-blue-400 cursor-pointer font-bold"
-        onClick={markComplete}
+    <div key={data.id} className="flex justify-between gap-2 mb-1 min-w-[500px]">
+      <div
+        className={
+          data.completed ? "line-through font-bold text-gray-700" : "font-bold text-gray-700"
+        }
       >
-        Complete
+        {data.title}
+      </div>
+      <button
+        type="button"
+        className="bg-blue-300 px-2 rounded active:bg-blue-400 cursor-pointer font-bold disabled:opacity-40"
+        onClick={markComplete}
+        disabled={states.has("update")}
+      >
+        {states.has("update")
+          ? "Updating..."
+          : data.completed
+          ? "Mark incomplete"
+          : "Mark complete"}
       </button>
     </div>
   );
 });
 
 export const Todo = React.memo(function Todo() {
-  const { items, isLoading, update } = useCrud(TodoCrud);
+  const {
+    items,
+    fetchState: { isLoading },
+  } = useCrud(TodoCrud);
 
   if (isLoading) {
     return <div>Loading...</div>;
   }
 
   return (
-    <div className="p-2">
-      {map(items, (item) => (
-        <Item key={item.data.id} item={item} update={update} />
-      ))}
+    <div>
+      <h2 className="font-bold text-3xl mt-4">Todo with useCrud()</h2>
+      <div className="p-2">
+        {map(items, (item) => (
+          <Item key={item.data.id} item={item} />
+        ))}
+      </div>
     </div>
   );
 });
