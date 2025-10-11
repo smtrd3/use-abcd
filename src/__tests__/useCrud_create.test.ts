@@ -60,7 +60,7 @@ describe("useCrud - create operation", () => {
       id: "new-Test Item",
       name: "Test Item",
     });
-    expect(result.current.items[0].state).toBe("idle");
+    expect(result.current.items[0].transitions.size).toBe(0);
   });
 
   it("should handle creation errors", async () => {
@@ -77,8 +77,8 @@ describe("useCrud - create operation", () => {
       result.current.create({ name: "Failed Item" });
     });
 
-    expect(result.current.items[0].state).toBe("create");
-    expect(result.current.items[0].errors).toHaveLength(1);
+    expect(result.current.items[0].transitions.get("default").at(0)).toBe("create");
+    expect(result.current.items[0].errors.size).toBe(1);
   });
 
   it("should create without backend call when no create function provided", async () => {
@@ -90,7 +90,7 @@ describe("useCrud - create operation", () => {
 
     expect(result.current.items).toHaveLength(1);
     expect(result.current.items[0].data.name).toBe("Local Item");
-    expect(result.current.items[0].state).toBe("idle");
+    expect(result.current.items[0].transitions.size).toBe(0);
   });
 
   it("should handle network errors", async () => {
@@ -107,8 +107,8 @@ describe("useCrud - create operation", () => {
       result.current.create({ name: "Error Item" });
     });
 
-    expect(result.current.items[0].state).toBe("create");
-    expect(result.current.items[0].errors).toHaveLength(1);
+    expect(result.current.items[0].transitions.get("default").at(0)).toBe("create");
+    expect(result.current.items[0].errors.size).toBe(1);
     expect(result.current.hasError).toBe(true);
   });
 
@@ -129,7 +129,7 @@ describe("useCrud - create operation", () => {
     });
 
     // Verify the item is in creating state
-    expect(result.current.items[0].state).toBe("create");
+    expect(result.current.items[0].transitions.get("default").at(0)).toBe("create");
     expect(result.current.items[0].optimistic).toBe(true);
 
     // Get the temporary ID of the item being created
