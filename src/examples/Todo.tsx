@@ -18,12 +18,13 @@ const TodoCrud: CrudConfig<Todo> = {
     age: 5000000,
     capacity: 10,
   },
-  fetch: async () => {
+  fetch: async ({ signal }) => {
+    await wait(2000, signal);
     return {
       items: await fetch("https://jsonplaceholder.typicode.com/todos")
         .then((r) => r.json())
         .then((items) => items.slice(0, 10)),
-      metadata: {},
+      metadata: { complete: "..." },
     };
   },
   update: async (item, { signal }) => {
@@ -68,13 +69,10 @@ const Item = React.memo(function Item(props: { item: ItemWithState<Todo> }) {
 });
 
 export const Todo = React.memo(function Todo() {
-  const {
-    items,
-    fetchState: { isLoading },
-  } = useCrud(TodoCrud);
-
-  if (isLoading) {
-    return <div>Loading...</div>;
+  const { items, fetchState } = useCrud(TodoCrud);
+  console.log(fetchState);
+  if (fetchState.isLoading) {
+    return <div className="p-5">Loading...</div>;
   }
 
   return (

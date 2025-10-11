@@ -136,11 +136,11 @@ class Store<T extends Item = Item, C extends object = object, M extends object =
     } catch (ex) {
       if ((ex as Error).name === "AbortError" || ex === CANCEL_RECOVERABLE) {
         this.customLog("fetch exception", "Fetch operation was cancelled by client");
-        this.endFetch();
         return;
       }
 
       if (ex === CANCELLED_BY_USER) {
+        this.customLog("fetch exception", "Fetch operation was cancelled by user");
         this.endFetch();
         return;
       }
