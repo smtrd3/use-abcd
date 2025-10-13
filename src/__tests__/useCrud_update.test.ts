@@ -14,7 +14,7 @@ const server = setupServer(
   http.patch("/api/items/:id", async ({ request, params }) => {
     const body = (await request.json()) as Partial<TestItem>;
     return HttpResponse.json({ id: params.id as string, ...body });
-  })
+  }),
 );
 
 // Enable API mocking before tests
@@ -60,7 +60,7 @@ describe("useCrud - update operation", () => {
       ({ item }) => {
         return useItemState("test", item as ItemWithState<TestItem>);
       },
-      { initialProps: { item } }
+      { initialProps: { item } },
     );
   };
 
@@ -81,7 +81,7 @@ describe("useCrud - update operation", () => {
           draft.name = "Updated Item 1";
           draft.count = 1;
         },
-        { isOptimistic: false }
+        { isOptimistic: false },
       );
     });
 
@@ -120,7 +120,7 @@ describe("useCrud - update operation", () => {
           draft.name = "Optimistically Updated";
           draft.count = 2;
         },
-        { isOptimistic: true }
+        { isOptimistic: true },
       );
     });
 
@@ -148,7 +148,7 @@ describe("useCrud - update operation", () => {
     server.use(
       http.patch("/api/items/:id", () => {
         return HttpResponse.error();
-      })
+      }),
     );
 
     const { result } = setupCrudHook({ isOptimistic: true });
@@ -212,7 +212,7 @@ describe("useCrud - update operation", () => {
       http.patch("/api/items/:id", async () => {
         await new Promise((resolve) => setTimeout(resolve, 1000));
         return HttpResponse.json({ id: "1", name: "Delayed Update" });
-      })
+      }),
     );
 
     const { result } = setupCrudHook();

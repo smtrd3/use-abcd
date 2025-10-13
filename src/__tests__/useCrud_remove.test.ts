@@ -21,7 +21,7 @@ const server = setupServer(
   }),
   http.get("/api/items", () => {
     return HttpResponse.json({ items: initialItems, metadata: {} });
-  })
+  }),
 );
 
 // Enable API mocking before tests
@@ -52,7 +52,7 @@ describe("useCrud - remove operation", () => {
           return response.json();
         },
         ...options,
-      })
+      }),
     );
   };
 
@@ -80,7 +80,7 @@ describe("useCrud - remove operation", () => {
     server.use(
       http.delete("/api/items/:id", () => {
         return HttpResponse.error();
-      })
+      }),
     );
 
     const { result } = setupHook();

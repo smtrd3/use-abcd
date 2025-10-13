@@ -18,7 +18,7 @@ const mockMetadata = {
 const server = setupServer(
   http.get("/api/items", () => {
     return HttpResponse.json({ items: mockItems, metadata: mockMetadata });
-  })
+  }),
 );
 
 // Enable API mocking before tests
@@ -70,7 +70,7 @@ describe("useCrud - fetch operations", () => {
     server.use(
       http.get("/api/items", () => {
         return HttpResponse.error();
-      })
+      }),
     );
 
     const { result } = renderHook(() => useCrud({ ...defaultConfig, id: "id-2" }));
@@ -108,7 +108,7 @@ describe("useCrud - fetch operations", () => {
         }),
       {
         initialProps: { page: 1 },
-      }
+      },
     );
 
     // Wait for initial fetch
@@ -150,7 +150,7 @@ describe("useCrud - fetch operations", () => {
         }),
       {
         initialProps: "test-1",
-      }
+      },
     );
 
     // Wait for initial fetch
@@ -183,7 +183,7 @@ describe("useCrud - fetch operations", () => {
       (context) => useCrud({ ...config, context, id: "id-4" }),
       {
         initialProps: { page: 1 },
-      }
+      },
     );
 
     // Trigger multiple rerenders in quick succession
@@ -223,7 +223,7 @@ describe("useCrud - fetch operations", () => {
         }),
       {
         initialProps: "test-1",
-      }
+      },
     );
 
     // Wait for initial fetch

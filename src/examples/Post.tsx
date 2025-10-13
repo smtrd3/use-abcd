@@ -55,7 +55,7 @@ function Post(props: { post: ItemWithState<PostType, TransitionStates> }) {
       (draft) => {
         draft.liked = true;
       },
-      { tag: "like" }
+      { tag: "like" },
     );
   }, [update]);
 

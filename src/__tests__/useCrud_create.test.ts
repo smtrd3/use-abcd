@@ -13,7 +13,7 @@ const server = setupServer(
   http.post("/api/items", async ({ request }) => {
     const body = (await request.json()) as { name: string };
     return HttpResponse.json({ id: `new-${body.name}` });
-  })
+  }),
 );
 
 // Enable API mocking before tests
@@ -45,7 +45,7 @@ describe("useCrud - create operation", () => {
           return response.json();
         },
         ...options,
-      })
+      }),
     );
   };
   it("should create an item without optimistic updates", async () => {
@@ -68,7 +68,7 @@ describe("useCrud - create operation", () => {
     server.use(
       http.post("/api/items", () => {
         return HttpResponse.error();
-      })
+      }),
     );
 
     const { result } = setupHook();
@@ -98,7 +98,7 @@ describe("useCrud - create operation", () => {
     server.use(
       http.post("/api/items", () => {
         return HttpResponse.error();
-      })
+      }),
     );
 
     const { result } = setupHook();
@@ -118,7 +118,7 @@ describe("useCrud - create operation", () => {
       http.post("/api/items", async () => {
         await new Promise((resolve) => setTimeout(resolve, 1000));
         return HttpResponse.json({ id: "new-delayed" });
-      })
+      }),
     );
 
     const { result } = setupHook();

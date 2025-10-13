@@ -61,8 +61,8 @@ const Item = React.memo(function Item(props: { item: ItemWithState<Todo> }) {
         {states.has("update")
           ? "Updating..."
           : data.completed
-          ? "Mark incomplete"
-          : "Mark complete"}
+            ? "Mark incomplete"
+            : "Mark complete"}
       </button>
     </div>
   );

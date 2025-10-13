@@ -13,7 +13,7 @@ export type TransitionStates = "create" | "update" | "delete" | "idle" | "change
 
 export type ItemWithState<
   T extends Item = Item,
-  State extends TransitionStates = TransitionStates
+  State extends TransitionStates = TransitionStates,
 > = {
   data: T;
   optimistic: boolean;
@@ -29,12 +29,12 @@ export type QueryOption = {
 };
 
 export type FetchFn<T extends Item = Item, M extends object = object> = (
-  option: QueryOption
+  option: QueryOption,
 ) => Promise<{ items: T[]; metadata?: M }>;
 
 export type TransitionFn<T extends Item = Item> = (
   item: Partial<T>,
-  option: QueryOption
+  option: QueryOption,
 ) => Promise<{ id: string }>;
 
 export type Updater<T> = (updatable: T) => void;
@@ -42,7 +42,7 @@ export type Updater<T> = (updatable: T) => void;
 export type StoreState<
   T extends Item = Item,
   C extends object = object,
-  M extends object = object
+  M extends object = object,
 > = {
   context: C;
   items: Map<string, ItemWithState<T>>;
@@ -56,7 +56,7 @@ export type StoreState<
 export type CrudConfig<
   T extends Item = Item,
   C extends object = object,
-  M extends object = object
+  M extends object = object,
 > = {
   id: string;
   context: C;
@@ -95,7 +95,10 @@ class Store<T extends Item = Item, C extends object = object, M extends object =
   fetchController: AbortController = new AbortController();
   fetchCache: FetchCache = new FetchCache();
 
-  constructor(private id: string = "<none>", private config: CrudConfig<T, C, M>) {
+  constructor(
+    private id: string = "<none>",
+    private config: CrudConfig<T, C, M>,
+  ) {
     this.setItems([]); // need to figure out how to set the initial items
 
     const { caching: { age = 0, capacity = 0 } = { age: 0, capacity: 0 }, context } = config;
@@ -533,7 +536,7 @@ class Store<T extends Item = Item, C extends object = object, M extends object =
 
   static instances: Map<string, Store<any>> = new Map();
   static createStore<T extends Item = Item, C extends object = object, M extends object = object>(
-    config: CrudConfig<T, C, M>
+    config: CrudConfig<T, C, M>,
   ): Store<T, C> {
     const { id } = config;
     if (Store.instances.has(id)) {
@@ -556,13 +559,13 @@ class Store<T extends Item = Item, C extends object = object, M extends object =
 export function useCrud<
   T extends Item = Item,
   C extends object = object,
-  M extends object = object
+  M extends object = object,
 >(config: CrudConfig<T, C, M>) {
   const store = Store.createStore<T, C, M>(config);
   const state = useSyncExternalStore(
     store.subscribe,
     store.getSnapshot,
-    config.getServerSnapshot || (() => INITIAL_STORE_STATE)
+    config.getServerSnapshot || (() => INITIAL_STORE_STATE),
   ) as StoreState<T, C, M>;
 
   const memoContext = useMemoDeepEquals(config.context);
@@ -580,28 +583,28 @@ export function useCrud<
     (id: string, tag?: string) => {
       store.cancelOperation(id, tag);
     },
-    [store]
+    [store],
   );
 
   const create = useCallback(
     (item: Partial<T>) => {
       store.executeCreate(item);
     },
-    [store]
+    [store],
   );
 
   const remove = useCallback(
     (item: T) => {
       store.executeRemove(item);
     },
-    [store]
+    [store],
   );
 
   const setContext = useCallback(
     (context: C) => {
       store.executeFetch(context);
     },
-    [store]
+    [store],
   );
 
   useEffect(() => {
@@ -636,7 +639,7 @@ export function useCrud<
       create,
       remove,
       hasError,
-    ]
+    ],
   );
 
   store.customLog("snapshot", snapshot);
@@ -645,7 +648,7 @@ export function useCrud<
 
 export function useItemState<T extends Item = Item>(
   storeId: string,
-  item: ItemWithState<T>
+  item: ItemWithState<T>,
 ): [
   T,
   {
@@ -660,7 +663,7 @@ export function useItemState<T extends Item = Item>(
     errorCount: number;
     itemWithState: ItemWithState<T>;
     store: Store<T>;
-  }
+  },
 ] {
   const store = Store.instances.get(storeId) as Store<T>;
   const data = useMemo(() => item.data, [item.data]);
@@ -669,11 +672,11 @@ export function useItemState<T extends Item = Item>(
   const update = useCallback(
     (
       updater: Updater<T>,
-      { tag, isOptimistic = false }: { tag?: string; isOptimistic?: boolean } = {}
+      { tag, isOptimistic = false }: { tag?: string; isOptimistic?: boolean } = {},
     ) => {
       store.executeUpdate({ item: data, updater, tag, isOptimistic });
     },
-    [data, store]
+    [data, store],
   );
 
   const remove = useCallback(() => {
@@ -684,7 +687,7 @@ export function useItemState<T extends Item = Item>(
     (cb: Updater<T>, tag?: string) => {
       store.executeUpdate({ item: data, updater: cb, isOptimistic: true, skipSave: true, tag });
     },
-    [data, store]
+    [data, store],
   );
 
   const save = useCallback(() => {
@@ -695,7 +698,7 @@ export function useItemState<T extends Item = Item>(
     (tag?: string) => {
       store.cancelOperation(data.id, tag);
     },
-    [store, data.id]
+    [store, data.id],
   );
 
   const states = useMemo(() => {
