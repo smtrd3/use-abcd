@@ -650,21 +650,21 @@ export function useItemState<T extends Item = Item>(
   storeId: string,
   item: ItemWithState<T>,
 ): [
-    T,
-    {
-      store: Store<T>;
-      hasError: boolean;
-      errorCount: number;
-      itemWithState: ItemWithState<T>;
-      states: Set<string>;
-      errors: Map<string, string[]>;
-      save: () => Promise<void>;
-      change: (cb: Updater<T>, tag?: string) => Promise<void>;
-      update: (cb: Updater<T>, options?: { tag?: string; isOptimistic?: boolean }) => Promise<void>;
-      remove: () => Promise<void>;
-      cancel: () => void;
-    },
-  ] {
+  T,
+  {
+    store: Store<T>;
+    hasError: boolean;
+    errorCount: number;
+    itemWithState: ItemWithState<T>;
+    states: Set<string>;
+    errors: Map<string, string[]>;
+    save: () => Promise<void>;
+    change: (cb: Updater<T>, tag?: string) => Promise<void>;
+    update: (cb: Updater<T>, options?: { tag?: string; isOptimistic?: boolean }) => Promise<void>;
+    remove: () => Promise<void>;
+    cancel: () => void;
+  },
+] {
   const store = Store.instances.get(storeId) as Store<T>;
   const data = useMemo(() => item.data, [item.data]);
   const transitions = useMemo(() => item.transitions, [item.transitions]);
@@ -685,7 +685,13 @@ export function useItemState<T extends Item = Item>(
 
   const change = useCallback(
     (cb: Updater<T>, tag?: string) => {
-      return store.executeUpdate({ item: data, updater: cb, isOptimistic: true, skipSave: true, tag });
+      return store.executeUpdate({
+        item: data,
+        updater: cb,
+        isOptimistic: true,
+        skipSave: true,
+        tag,
+      });
     },
     [data, store],
   );
