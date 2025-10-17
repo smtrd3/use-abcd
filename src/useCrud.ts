@@ -588,14 +588,14 @@ export function useCrud<
 
   const create = useCallback(
     (item: Partial<T>) => {
-      store.executeCreate(item);
+      return store.executeCreate(item);
     },
     [store],
   );
 
   const remove = useCallback(
     (item: T) => {
-      store.executeRemove(item);
+      return store.executeRemove(item);
     },
     [store],
   );
@@ -650,21 +650,21 @@ export function useItemState<T extends Item = Item>(
   storeId: string,
   item: ItemWithState<T>,
 ): [
-  T,
-  {
-    errors: Map<string, string[]>;
-    states: Set<string>;
-    save: () => void;
-    change: (cb: Updater<T>, tag?: string) => void;
-    update: (cb: Updater<T>, options?: { tag?: string; isOptimistic?: boolean }) => void;
-    remove: () => void;
-    cancel: () => void;
-    hasError: boolean;
-    errorCount: number;
-    itemWithState: ItemWithState<T>;
-    store: Store<T>;
-  },
-] {
+    T,
+    {
+      store: Store<T>;
+      hasError: boolean;
+      errorCount: number;
+      itemWithState: ItemWithState<T>;
+      states: Set<string>;
+      errors: Map<string, string[]>;
+      save: () => Promise<void>;
+      change: (cb: Updater<T>, tag?: string) => Promise<void>;
+      update: (cb: Updater<T>, options?: { tag?: string; isOptimistic?: boolean }) => Promise<void>;
+      remove: () => Promise<void>;
+      cancel: () => void;
+    },
+  ] {
   const store = Store.instances.get(storeId) as Store<T>;
   const data = useMemo(() => item.data, [item.data]);
   const transitions = useMemo(() => item.transitions, [item.transitions]);
@@ -674,24 +674,24 @@ export function useItemState<T extends Item = Item>(
       updater: Updater<T>,
       { tag, isOptimistic = false }: { tag?: string; isOptimistic?: boolean } = {},
     ) => {
-      store.executeUpdate({ item: data, updater, tag, isOptimistic });
+      return store.executeUpdate({ item: data, updater, tag, isOptimistic });
     },
     [data, store],
   );
 
   const remove = useCallback(() => {
-    store.executeRemove(data);
+    return store.executeRemove(data);
   }, [data, store]);
 
   const change = useCallback(
     (cb: Updater<T>, tag?: string) => {
-      store.executeUpdate({ item: data, updater: cb, isOptimistic: true, skipSave: true, tag });
+      return store.executeUpdate({ item: data, updater: cb, isOptimistic: true, skipSave: true, tag });
     },
     [data, store],
   );
 
   const save = useCallback(() => {
-    store.executeUpdate({ item: data, updater: identity, isOptimistic: false });
+    return store.executeUpdate({ item: data, updater: identity, isOptimistic: false });
   }, [data, store]);
 
   const cancel = useCallback(
@@ -716,6 +716,8 @@ export function useItemState<T extends Item = Item>(
 
   const errorCount = useMemo(() => item.errors.size, [item.errors]);
 
+  const errors = useMemo(() => item.errors, [item.errors]);
+
   return [
     data,
     {
@@ -724,7 +726,7 @@ export function useItemState<T extends Item = Item>(
       save,
       remove,
       cancel,
-      errors: item.errors,
+      errors,
       errorCount,
       hasError,
       states,
