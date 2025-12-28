@@ -309,7 +309,7 @@ export const batchHandlers = [
       return HttpResponse.json({ error: "Invalid payload" }, { status: 400 });
     }
 
-    const results = changes.map((change: any) => {
+    const results = changes.map((change: { id: string }) => {
       try {
         // Simulate processing each change
         return {

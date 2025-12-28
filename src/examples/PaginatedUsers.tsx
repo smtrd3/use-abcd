@@ -20,7 +20,7 @@ interface PaginationMeta {
 
 // Store for pagination metadata (shared across renders)
 let paginationMeta: PaginationMeta = { total: 0, hasMore: false };
-let metaListeners: Set<() => void> = new Set();
+const metaListeners: Set<() => void> = new Set();
 
 const notifyMetaListeners = () => {
   metaListeners.forEach((listener) => listener());
