@@ -6,11 +6,12 @@ import react from "@vitejs/plugin-react";
 export default defineConfig({
   publicDir: false, // Disable public directory processing
   build: {
+    sourcemap: true,
     lib: {
-      entry: resolve(__dirname, "src/useCrud.ts"),
-      name: "useCrud",
+      entry: resolve(__dirname, "src/index.ts"),
+      name: "useAbcd",
       formats: ["es"],
-      fileName: "useCrud",
+      fileName: "index",
     },
     rollupOptions: {
       external: ["react", "react-dom"],

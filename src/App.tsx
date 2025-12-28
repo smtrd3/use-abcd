@@ -1,28 +1,40 @@
 import { useCallback } from "react";
-import PostContainer from "./examples/Post";
-import { Todo } from "./examples/Todo";
+import { Products } from "./examples/Products";
+import { PaginatedUsers } from "./examples/PaginatedUsers";
+import { OptimisticComments } from "./examples/OptimisticComments";
 import "./index.css";
 import { Switch, Route, Link } from "wouter";
 
 function App() {
   const active = useCallback((active: boolean) => {
-    return active ? "underline" : "";
+    return active ? "underline font-semibold" : "";
   }, []);
 
   return (
-    <div className="p-4">
-      <nav className="flex gap-2">
-        <Link className={active} to="/">
-          Blog
-        </Link>
-        <Link className={active} to="/2">
-          Todo
-        </Link>
+    <div className="min-h-screen bg-gray-50">
+      <nav className="bg-white shadow-sm mb-6 p-4">
+        <div className="max-w-6xl mx-auto">
+          <h1 className="text-2xl font-bold mb-3 text-gray-800">use-abcd Examples</h1>
+          <div className="flex flex-wrap gap-3">
+            <Link className={active} to="/">
+              <span className="text-blue-600 hover:text-blue-800">Products (Full CRUD)</span>
+            </Link>
+            <Link className={active} to="/pagination">
+              <span className="text-blue-600 hover:text-blue-800">Pagination</span>
+            </Link>
+            <Link className={active} to="/optimistic">
+              <span className="text-blue-600 hover:text-blue-800">Optimistic Updates</span>
+            </Link>
+          </div>
+        </div>
       </nav>
-      <Switch>
-        <Route path="/2" component={Todo} />
-        <Route path="/" component={PostContainer} />
-      </Switch>
+      <div className="max-w-6xl mx-auto px-4">
+        <Switch>
+          <Route path="/" component={Products} />
+          <Route path="/pagination" component={PaginatedUsers} />
+          <Route path="/optimistic" component={OptimisticComments} />
+        </Switch>
+      </div>
     </div>
   );
 }

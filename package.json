@@ -8,13 +8,13 @@
   "type": "module",
   "exports": {
     ".": {
-      "types": "./dist/useCrud.d.ts",
-      "import": "./dist/useCrud.js"
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
     }
   },
-  "main": "./dist/useCrud.js",
-  "module": "./dist/useCrud.js",
-  "types": "./dist/useCrud.d.ts",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "files": [
     "dist"
   ],
@@ -65,5 +65,10 @@
     "vitest": "^3.2.4",
     "wouter": "^3.7.1"
   },
-  "packageManager": "bun@1.3.0"
+  "packageManager": "bun@1.3.0",
+  "msw": {
+    "workerDirectory": [
+      "public"
+    ]
+  }
 }
