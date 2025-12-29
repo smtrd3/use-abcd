@@ -18,8 +18,14 @@ export { categorizeResults };
 
 export type ServerFetchHandler<T, Q> = (query: Q) => Promise<T[]> | T[];
 export type ServerCreateHandler<T> = (data: T) => Promise<SyncHandlerResult> | SyncHandlerResult;
-export type ServerUpdateHandler<T> = (id: string, data: T) => Promise<SyncHandlerResult> | SyncHandlerResult;
-export type ServerDeleteHandler<T> = (id: string, data: T) => Promise<SyncHandlerResult> | SyncHandlerResult;
+export type ServerUpdateHandler<T> = (
+  id: string,
+  data: T,
+) => Promise<SyncHandlerResult> | SyncHandlerResult;
+export type ServerDeleteHandler<T> = (
+  id: string,
+  data: T,
+) => Promise<SyncHandlerResult> | SyncHandlerResult;
 
 export type ServerSyncHandlerConfig<T, Q = unknown> = {
   schema?: Schema<T>;
@@ -57,9 +63,12 @@ const responses = {
   success: (data: unknown) => jsonResponse(data, 200),
   methodNotAllowed: () => jsonResponse({ error: "Method not allowed. Use POST." }, 405),
   invalidJson: () => jsonResponse({ error: "Invalid JSON body" }, 400),
-  invalidPayload: () => jsonResponse({ error: "Request body must contain 'query' and/or 'changes'" }, 400),
-  validationError: (message: string) => jsonResponse({ error: `Validation error: ${message}` }, 400),
-  notConfigured: (handler: string) => jsonResponse({ error: `${handler} handler not configured` }, 501),
+  invalidPayload: () =>
+    jsonResponse({ error: "Request body must contain 'query' and/or 'changes'" }, 400),
+  validationError: (message: string) =>
+    jsonResponse({ error: `Validation error: ${message}` }, 400),
+  notConfigured: (handler: string) =>
+    jsonResponse({ error: `${handler} handler not configured` }, 501),
   serverError: (error: unknown) =>
     jsonResponse({ error: error instanceof Error ? error.message : "Internal server error" }, 500),
 } as const;
@@ -70,7 +79,10 @@ const responses = {
 
 type ChangeProcessor<T, Q> = {
   guard: (config: ServerSyncHandlerConfig<T, Q>) => boolean;
-  execute: (change: Change<T>, config: ServerSyncHandlerConfig<T, Q>) => Promise<SyncHandlerResult> | SyncHandlerResult;
+  execute: (
+    change: Change<T>,
+    config: ServerSyncHandlerConfig<T, Q>,
+  ) => Promise<SyncHandlerResult> | SyncHandlerResult;
   toResult: (change: Change<T>, result: SyncHandlerResult) => SyncResult;
   notConfiguredError: string;
 };
@@ -145,7 +157,11 @@ async function processServerChange<T, Q>(
     const result = await processor.execute({ ...change, data: validation.data }, config);
     return processor.toResult(change, result);
   } catch (error) {
-    return { id: change.id, status: "error", error: error instanceof Error ? error.message : "Unknown error" };
+    return {
+      id: change.id,
+      status: "error",
+      error: error instanceof Error ? error.message : "Unknown error",
+    };
   }
 }
 
@@ -223,6 +239,11 @@ export function createSyncServer<T, Q = unknown>(
     fetchItems,
     processChanges,
     processChangesWithStats,
-    handlers: { fetch: config.fetch, create: config.create, update: config.update, delete: config.delete },
+    handlers: {
+      fetch: config.fetch,
+      create: config.create,
+      update: config.update,
+      delete: config.delete,
+    },
   };
 }

@@ -127,13 +127,10 @@ export const OptimisticComments = React.memo(function OptimisticComments() {
     setNewCommentText("");
   }, [newCommentText, create]);
 
-  const handleEditComment = useCallback(
-    (comment: Comment) => {
-      setEditingId(comment.id);
-      setEditText(comment.text);
-    },
-    [],
-  );
+  const handleEditComment = useCallback((comment: Comment) => {
+    setEditingId(comment.id);
+    setEditText(comment.text);
+  }, []);
 
   const handleSaveEdit = useCallback(
     (id: string) => {

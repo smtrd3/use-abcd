@@ -15,8 +15,16 @@ export { categorizeResults };
 // ============================================================================
 
 export type CreateHandler<T> = (data: T, signal: AbortSignal) => Promise<SyncHandlerResult>;
-export type UpdateHandler<T> = (id: string, data: T, signal: AbortSignal) => Promise<SyncHandlerResult>;
-export type DeleteHandler<T> = (id: string, data: T, signal: AbortSignal) => Promise<SyncHandlerResult>;
+export type UpdateHandler<T> = (
+  id: string,
+  data: T,
+  signal: AbortSignal,
+) => Promise<SyncHandlerResult>;
+export type DeleteHandler<T> = (
+  id: string,
+  data: T,
+  signal: AbortSignal,
+) => Promise<SyncHandlerResult>;
 
 export type SyncBuilderConfig<T> = {
   create?: CreateHandler<T>;
@@ -45,7 +53,11 @@ export type FetchToSyncResultOptions = {
 
 type ChangeProcessor<T> = {
   guard: (config: SyncBuilderConfig<T>) => boolean;
-  execute: (change: Change<T>, config: SyncBuilderConfig<T>, signal: AbortSignal) => Promise<SyncHandlerResult>;
+  execute: (
+    change: Change<T>,
+    config: SyncBuilderConfig<T>,
+    signal: AbortSignal,
+  ) => Promise<SyncHandlerResult>;
   toResult: (change: Change<T>, result: SyncHandlerResult) => SyncResult;
 };
 
@@ -105,7 +117,11 @@ async function processChange<T>(
     const result = await processor.execute(change, config, signal);
     return processor.toResult(change, result);
   } catch (error) {
-    return { id: change.id, status: "error", error: error instanceof Error ? error.message : "Unknown error" };
+    return {
+      id: change.id,
+      status: "error",
+      error: error instanceof Error ? error.message : "Unknown error",
+    };
   }
 }
 
@@ -131,7 +147,10 @@ export function createSyncClientWithStats<T>(config: SyncBuilderConfig<T>): {
 } {
   const { onSync, handlers } = createSyncClient(config);
 
-  const onSyncWithStats = async (changes: Change<T>[], signal: AbortSignal): Promise<SyncBatchResult> => {
+  const onSyncWithStats = async (
+    changes: Change<T>[],
+    signal: AbortSignal,
+  ): Promise<SyncBatchResult> => {
     const results = await onSync(changes, signal);
     return categorizeResults(results);
   };
@@ -161,7 +180,7 @@ export function createSyncClientFromEndpoint<T, Q = unknown>(
   config: string | EndpointSyncClientConfig,
 ): EndpointSyncClient<T, Q> {
   const endpoint = typeof config === "string" ? config : config.endpoint;
-  const headers = typeof config === "string" ? {} : config.headers ?? {};
+  const headers = typeof config === "string" ? {} : (config.headers ?? {});
 
   const onFetch = async (query: Q, signal: AbortSignal): Promise<T[]> => {
     if (signal.aborted) {
@@ -200,7 +219,11 @@ export function createSyncClientFromEndpoint<T, Q = unknown>(
 
   const onSync = async (changes: Change<T>[], signal: AbortSignal): Promise<SyncResult[]> => {
     if (signal.aborted) {
-      return changes.map((c) => ({ id: c.id, status: "error" as const, error: "Operation aborted" }));
+      return changes.map((c) => ({
+        id: c.id,
+        status: "error" as const,
+        error: "Operation aborted",
+      }));
     }
 
     try {
@@ -224,11 +247,21 @@ export function createSyncClientFromEndpoint<T, Q = unknown>(
       }
 
       const responseBody: SyncResponseBody<T> = await response.json();
-      return responseBody.syncResults ?? changes.map((c) => ({ id: c.id, status: "error" as const, error: "No sync results returned" }));
+      return (
+        responseBody.syncResults ??
+        changes.map((c) => ({
+          id: c.id,
+          status: "error" as const,
+          error: "No sync results returned",
+        }))
+      );
     } catch (error) {
-      const errorMsg = error instanceof Error && error.name === "AbortError"
-        ? "Operation aborted"
-        : error instanceof Error ? error.message : "Unknown error";
+      const errorMsg =
+        error instanceof Error && error.name === "AbortError"
+          ? "Operation aborted"
+          : error instanceof Error
+            ? error.message
+            : "Unknown error";
       return changes.map((c) => ({ id: c.id, status: "error" as const, error: errorMsg }));
     }
   };
@@ -236,7 +269,9 @@ export function createSyncClientFromEndpoint<T, Q = unknown>(
   return { onFetch, onSync };
 }
 
-export async function fetchToSyncResult(options: FetchToSyncResultOptions): Promise<SyncHandlerResult> {
+export async function fetchToSyncResult(
+  options: FetchToSyncResultOptions,
+): Promise<SyncHandlerResult> {
   const { fetch: fetchPromise, parseResponse, parseError } = options;
 
   const getErrorMessage = (error: unknown): string => {

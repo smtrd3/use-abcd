@@ -30,10 +30,7 @@ export function useItem<T, C>(item: Item<T, C>): UseItemResult<T> {
     () => item.exists(),
   );
 
-  const update = useCallback(
-    (mutate: (draft: Draft<T>) => void) => item.update(mutate),
-    [item],
-  );
+  const update = useCallback((mutate: (draft: Draft<T>) => void) => item.update(mutate), [item]);
 
   const remove = useCallback(() => item.remove(), [item]);
 

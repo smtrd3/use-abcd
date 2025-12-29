@@ -33,7 +33,10 @@ const createRequest = <T, Q>(body: SyncRequestBody<T, Q>, method = "POST"): Requ
   });
 };
 
-const createMockSchema = <T>(validator: (data: unknown) => boolean, errorMessage = "Validation failed"): Schema<T> => ({
+const createMockSchema = <T>(
+  validator: (data: unknown) => boolean,
+  errorMessage = "Validation failed",
+): Schema<T> => ({
   safeParse: (data: unknown) => {
     if (validator(data)) {
       return { success: true, data: data as T };
@@ -232,7 +235,9 @@ describe("createSyncServer", () => {
   describe("Query Validation", () => {
     it("validates query with querySchema", async () => {
       const querySchema = createMockSchema<TestQuery>(
-        (data) => typeof (data as TestQuery).page === "number" && typeof (data as TestQuery).limit === "number",
+        (data) =>
+          typeof (data as TestQuery).page === "number" &&
+          typeof (data as TestQuery).limit === "number",
         "Invalid query parameters",
       );
 
@@ -466,7 +471,8 @@ describe("createSyncServer", () => {
 
     it("rejects invalid data with validation error", async () => {
       const schema = createMockSchema<TestItem>(
-        (data) => typeof (data as TestItem).email === "string" && (data as TestItem).email!.includes("@"),
+        (data) =>
+          typeof (data as TestItem).email === "string" && (data as TestItem).email!.includes("@"),
         "email must be valid",
       );
 
@@ -475,7 +481,9 @@ describe("createSyncServer", () => {
         create: () => serverSyncSuccess({ newId: "new-1" }),
       });
       const request = createRequest<TestItem, unknown>({
-        changes: [{ id: "temp-1", type: "create", data: { id: "temp-1", name: "Item", email: "invalid" } }],
+        changes: [
+          { id: "temp-1", type: "create", data: { id: "temp-1", name: "Item", email: "invalid" } },
+        ],
       });
 
       const response = await handler.handler(request);

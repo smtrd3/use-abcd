@@ -101,8 +101,10 @@ const UsersConfig: Config<User, UserContext> = {
 };
 
 export const PaginatedUsers = React.memo(function PaginatedUsers() {
-  const { items, context, loading, create, update, remove, setContext, getItemStatus } =
-    useCrud<User, UserContext>(UsersConfig);
+  const { items, context, loading, create, update, remove, setContext, getItemStatus } = useCrud<
+    User,
+    UserContext
+  >(UsersConfig);
 
   const [meta, setMeta] = useState<PaginationMeta>({ total: 0, hasMore: false });
 

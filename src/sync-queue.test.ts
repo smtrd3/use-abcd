@@ -1082,7 +1082,9 @@ describe("SyncQueue", () => {
 
     it("should not call onIdRemap for failed create operations", async () => {
       const mockIdRemap = vi.fn();
-      mockOnSync.mockResolvedValue([{ id: "temp-1", status: "error", error: "Failed", newId: "server-1" }]);
+      mockOnSync.mockResolvedValue([
+        { id: "temp-1", status: "error", error: "Failed", newId: "server-1" },
+      ]);
 
       syncQueue = new SyncQueue({
         debounce: 50,

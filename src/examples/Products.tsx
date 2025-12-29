@@ -215,9 +215,7 @@ const ProductItem = React.memo(function ProductItem({
                 {status.status === "success" && "Synced"}
               </span>
               {status.retries > 0 && (
-                <span className="text-xs text-gray-500 ml-2">
-                  (Retries: {status.retries})
-                </span>
+                <span className="text-xs text-gray-500 ml-2">(Retries: {status.retries})</span>
               )}
             </div>
           )}
@@ -322,14 +320,10 @@ export const Products = React.memo(function Products() {
               </span>
               {syncing && <span className="text-sm text-blue-600">Syncing changes...</span>}
               {hasPendingChanges && !syncing && (
-                <span className="text-sm text-yellow-600">
-                  {syncQueue.queue.size} pending
-                </span>
+                <span className="text-sm text-yellow-600">{syncQueue.queue.size} pending</span>
               )}
               {hasErrors && (
-                <span className="text-sm text-red-600">
-                  {syncQueue.errors.size} errors
-                </span>
+                <span className="text-sm text-red-600">{syncQueue.errors.size} errors</span>
               )}
             </div>
             <div className="flex gap-2">

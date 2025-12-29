@@ -198,7 +198,10 @@ describe("Client Sync Utilities", () => {
         const { onSync } = createSyncClient<TestItem>({ create: createFn });
         const controller = new AbortController();
 
-        await onSync([{ id: "1", type: "create", data: { id: "1", name: "Item" } }], controller.signal);
+        await onSync(
+          [{ id: "1", type: "create", data: { id: "1", name: "Item" } }],
+          controller.signal,
+        );
 
         expect(createFn).toHaveBeenCalledWith({ id: "1", name: "Item" }, controller.signal);
       });
@@ -336,7 +339,13 @@ describe("Client Sync Utilities", () => {
         const signal = new AbortController().signal;
 
         const results = await onSync(
-          [{ id: "1", type: "unknown" as Change<TestItem>["type"], data: { id: "1", name: "Item" } }],
+          [
+            {
+              id: "1",
+              type: "unknown" as Change<TestItem>["type"],
+              data: { id: "1", name: "Item" },
+            },
+          ],
           signal,
         );
 
@@ -436,8 +445,7 @@ describe("Client Sync Utilities", () => {
 
     it("returns onSyncWithStats function with categorized results", async () => {
       const { onSyncWithStats } = createSyncClientWithStats<TestItem>({
-        create: async (data) =>
-          data.name === "fail" ? syncError("Failed") : syncSuccess(),
+        create: async (data) => (data.name === "fail" ? syncError("Failed") : syncSuccess()),
       });
       const signal = new AbortController().signal;
 
@@ -619,7 +627,9 @@ describe("Client Sync Utilities", () => {
     });
 
     it("accepts string endpoint config", async () => {
-      mockFetch.mockResolvedValue(new Response(JSON.stringify({ syncResults: [] }), { status: 200 }));
+      mockFetch.mockResolvedValue(
+        new Response(JSON.stringify({ syncResults: [] }), { status: 200 }),
+      );
 
       const { onSync } = createSyncClientFromEndpoint<TestItem>("/api/items/sync");
       await onSync([], new AbortController().signal);
@@ -628,7 +638,9 @@ describe("Client Sync Utilities", () => {
     });
 
     it("accepts object config with custom headers", async () => {
-      mockFetch.mockResolvedValue(new Response(JSON.stringify({ syncResults: [] }), { status: 200 }));
+      mockFetch.mockResolvedValue(
+        new Response(JSON.stringify({ syncResults: [] }), { status: 200 }),
+      );
 
       const { onSync } = createSyncClientFromEndpoint<TestItem>({
         endpoint: "/api/sync",
@@ -748,7 +760,9 @@ describe("Client Sync Utilities", () => {
           { id: "1", name: "Item 1" },
           { id: "2", name: "Item 2" },
         ];
-        mockFetch.mockResolvedValue(new Response(JSON.stringify({ results: items }), { status: 200 }));
+        mockFetch.mockResolvedValue(
+          new Response(JSON.stringify({ results: items }), { status: 200 }),
+        );
 
         const { onFetch } = createSyncClientFromEndpoint<TestItem, { page: number }>("/api/sync");
         const signal = new AbortController().signal;
@@ -780,7 +794,9 @@ describe("Client Sync Utilities", () => {
 
         const { onFetch } = createSyncClientFromEndpoint<TestItem, { page: number }>("/api/sync");
 
-        await expect(onFetch({ page: 1 }, new AbortController().signal)).rejects.toThrow("Server error");
+        await expect(onFetch({ page: 1 }, new AbortController().signal)).rejects.toThrow(
+          "Server error",
+        );
       });
 
       it("throws default error when response has no error field", async () => {
@@ -788,7 +804,9 @@ describe("Client Sync Utilities", () => {
 
         const { onFetch } = createSyncClientFromEndpoint<TestItem, { page: number }>("/api/sync");
 
-        await expect(onFetch({ page: 1 }, new AbortController().signal)).rejects.toThrow("Fetch request failed");
+        await expect(onFetch({ page: 1 }, new AbortController().signal)).rejects.toThrow(
+          "Fetch request failed",
+        );
       });
 
       it("throws when already aborted", async () => {
@@ -805,7 +823,9 @@ describe("Client Sync Utilities", () => {
 
         const { onFetch } = createSyncClientFromEndpoint<TestItem, { page: number }>("/api/sync");
 
-        await expect(onFetch({ page: 1 }, new AbortController().signal)).rejects.toThrow("Network failure");
+        await expect(onFetch({ page: 1 }, new AbortController().signal)).rejects.toThrow(
+          "Network failure",
+        );
       });
 
       it("handles abort errors", async () => {
@@ -815,7 +835,9 @@ describe("Client Sync Utilities", () => {
 
         const { onFetch } = createSyncClientFromEndpoint<TestItem, { page: number }>("/api/sync");
 
-        await expect(onFetch({ page: 1 }, new AbortController().signal)).rejects.toThrow("Operation aborted");
+        await expect(onFetch({ page: 1 }, new AbortController().signal)).rejects.toThrow(
+          "Operation aborted",
+        );
       });
 
       it("uses custom headers", async () => {

@@ -5,6 +5,7 @@ Client and server utilities for building type-safe CRUD sync operations.
 ## Overview
 
 The runtime module provides:
+
 - **Client-side**: `createSyncClient` for creating sync handlers with parallel execution
 - **Server-side**: `createSyncServer` for creating unified CRUD endpoints
 - **Shared types**: Common result types used by both client and server
@@ -13,13 +14,13 @@ The runtime module provides:
 
 ```typescript
 // From main package (client utilities only)
-import { createSyncClient, fetchToSyncResult } from 'use-abcd';
+import { createSyncClient, fetchToSyncResult } from "use-abcd";
 
 // From runtime/client (both client and server utilities)
-import { createSyncClient, createSyncServer } from 'use-abcd/runtime/client';
+import { createSyncClient, createSyncServer } from "use-abcd/runtime/client";
 
 // From runtime/server (server utilities only)
-import { createSyncServer, serverSyncSuccess } from 'use-abcd/runtime/server';
+import { createSyncServer, serverSyncSuccess } from "use-abcd/runtime/server";
 ```
 
 ## Client-Side Guide
@@ -27,17 +28,17 @@ import { createSyncServer, serverSyncSuccess } from 'use-abcd/runtime/server';
 ### Basic Usage
 
 ```typescript
-import { createSyncClient, fetchToSyncResult } from 'use-abcd';
+import { createSyncClient, fetchToSyncResult } from "use-abcd";
 
 const { onSync } = createSyncClient<User>({
   create: async (data, signal) => {
-    const response = await fetch('/api/users', {
-      method: 'POST',
+    const response = await fetch("/api/users", {
+      method: "POST",
       body: JSON.stringify(data),
       signal,
     });
     if (!response.ok) {
-      return { success: false, error: 'Failed to create user' };
+      return { success: false, error: "Failed to create user" };
     }
     const result = await response.json();
     return { success: true, newId: result.id };
@@ -45,23 +46,23 @@ const { onSync } = createSyncClient<User>({
 
   update: async (id, data, signal) => {
     const response = await fetch(`/api/users/${id}`, {
-      method: 'PATCH',
+      method: "PATCH",
       body: JSON.stringify(data),
       signal,
     });
     if (!response.ok) {
-      return { success: false, error: 'Failed to update user' };
+      return { success: false, error: "Failed to update user" };
     }
     return { success: true };
   },
 
   delete: async (id, data, signal) => {
     const response = await fetch(`/api/users/${id}`, {
-      method: 'DELETE',
+      method: "DELETE",
       signal,
     });
     if (!response.ok) {
-      return { success: false, error: 'Failed to delete user' };
+      return { success: false, error: "Failed to delete user" };
     }
     return { success: true };
   },
@@ -82,8 +83,8 @@ Simplifies fetch-based handlers:
 const { onSync } = createSyncClient<User>({
   create: async (data, signal) => {
     return fetchToSyncResult({
-      fetch: fetch('/api/users', {
-        method: 'POST',
+      fetch: fetch("/api/users", {
+        method: "POST",
         body: JSON.stringify(data),
         signal,
       }),
@@ -91,18 +92,19 @@ const { onSync } = createSyncClient<User>({
         const result = await response.json();
         return { newId: result.id };
       },
-      parseError: 'Failed to create user',
+      parseError: "Failed to create user",
     });
   },
 
   update: async (id, data, signal) => {
     return fetchToSyncResult({
       fetch: fetch(`/api/users/${id}`, {
-        method: 'PATCH',
+        method: "PATCH",
         body: JSON.stringify(data),
         signal,
       }),
-      parseError: (error) => `Update failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      parseError: (error) =>
+        `Update failed: ${error instanceof Error ? error.message : "Unknown error"}`,
     });
   },
 });
@@ -113,7 +115,7 @@ const { onSync } = createSyncClient<User>({
 Use `createSyncClientWithStats` for detailed results:
 
 ```typescript
-import { createSyncClientWithStats } from 'use-abcd';
+import { createSyncClientWithStats } from "use-abcd";
 
 const { onSync, onSyncWithStats } = createSyncClientWithStats<User>({
   // ... handlers
@@ -128,13 +130,13 @@ if (!batchResult.allSucceeded) {
 ### Helper Functions
 
 ```typescript
-import { syncSuccess, syncError } from 'use-abcd';
+import { syncSuccess, syncError } from "use-abcd";
 
 // Return success
-return syncSuccess({ newId: 'abc123' });
+return syncSuccess({ newId: "abc123" });
 
 // Return error
-return syncError('Something went wrong');
+return syncError("Something went wrong");
 ```
 
 ## Server-Side Guide
@@ -142,7 +144,7 @@ return syncError('Something went wrong');
 ### Basic Usage
 
 ```typescript
-import { createSyncServer, serverSyncSuccess, serverSyncError } from 'use-abcd/runtime/server';
+import { createSyncServer, serverSyncSuccess, serverSyncError } from "use-abcd/runtime/server";
 
 const usersHandler = createSyncServer<User, UserQuery>({
   fetch: async (query) => {
@@ -172,8 +174,8 @@ const usersHandler = createSyncServer<User, UserQuery>({
 ### With Zod Validation
 
 ```typescript
-import { z } from 'zod';
-import { createSyncServer } from 'use-abcd/runtime/server';
+import { z } from "zod";
+import { createSyncServer } from "use-abcd/runtime/server";
 
 const UserSchema = z.object({
   id: z.string(),
@@ -219,7 +221,7 @@ Response: { results: [...], syncResults: [...] }
 
 ```typescript
 // Hono
-app.post('/api/users', (c) => usersHandler.handler(c.req.raw));
+app.post("/api/users", (c) => usersHandler.handler(c.req.raw));
 
 // Next.js App Router
 export const POST = usersHandler.handler;
@@ -227,10 +229,10 @@ export const POST = usersHandler.handler;
 // Bun.serve
 Bun.serve({
   fetch(req) {
-    if (new URL(req.url).pathname === '/api/users') {
+    if (new URL(req.url).pathname === "/api/users") {
       return usersHandler.handler(req);
     }
-  }
+  },
 });
 ```
 
@@ -253,31 +255,31 @@ const batchResult = await usersHandler.processChangesWithStats(changes);
 
 ### Shared Types
 
-| Type | Description |
-|------|-------------|
-| `SyncHandlerResult` | `{ success: true; newId?: string }` or `{ success: false; error: string }` |
-| `SyncBatchResult` | Aggregated results with `results`, `successful`, `failed`, `allSucceeded`, `anySucceeded`, `summary` |
-| `Schema<T>` | Zod-compatible schema interface |
-| `SyncRequestBody<T, Q>` | `{ query?: Q; changes?: Change<T>[] }` |
-| `SyncResponseBody<T>` | `{ results?: T[]; syncResults?: SyncResult[] }` |
+| Type                    | Description                                                                                          |
+| ----------------------- | ---------------------------------------------------------------------------------------------------- |
+| `SyncHandlerResult`     | `{ success: true; newId?: string }` or `{ success: false; error: string }`                           |
+| `SyncBatchResult`       | Aggregated results with `results`, `successful`, `failed`, `allSucceeded`, `anySucceeded`, `summary` |
+| `Schema<T>`             | Zod-compatible schema interface                                                                      |
+| `SyncRequestBody<T, Q>` | `{ query?: Q; changes?: Change<T>[] }`                                                               |
+| `SyncResponseBody<T>`   | `{ results?: T[]; syncResults?: SyncResult[] }`                                                      |
 
 ### Client Types
 
-| Type | Description |
-|------|-------------|
-| `CreateHandler<T>` | `(data: T, signal: AbortSignal) => Promise<SyncHandlerResult>` |
-| `UpdateHandler<T>` | `(id: string, data: T, signal: AbortSignal) => Promise<SyncHandlerResult>` |
-| `DeleteHandler<T>` | `(id: string, data: T, signal: AbortSignal) => Promise<SyncHandlerResult>` |
-| `SyncBuilderConfig<T>` | Config with optional `create`, `update`, `delete` handlers |
-| `SyncBuilder<T>` | Result with `onSync` function and `handlers` |
+| Type                   | Description                                                                |
+| ---------------------- | -------------------------------------------------------------------------- |
+| `CreateHandler<T>`     | `(data: T, signal: AbortSignal) => Promise<SyncHandlerResult>`             |
+| `UpdateHandler<T>`     | `(id: string, data: T, signal: AbortSignal) => Promise<SyncHandlerResult>` |
+| `DeleteHandler<T>`     | `(id: string, data: T, signal: AbortSignal) => Promise<SyncHandlerResult>` |
+| `SyncBuilderConfig<T>` | Config with optional `create`, `update`, `delete` handlers                 |
+| `SyncBuilder<T>`       | Result with `onSync` function and `handlers`                               |
 
 ### Server Types
 
-| Type | Description |
-|------|-------------|
-| `ServerFetchHandler<T, Q>` | `(query: Q) => Promise<T[]> \| T[]` |
-| `ServerCreateHandler<T>` | `(data: T) => Promise<SyncHandlerResult> \| SyncHandlerResult` |
-| `ServerUpdateHandler<T>` | `(id: string, data: T) => Promise<SyncHandlerResult> \| SyncHandlerResult` |
-| `ServerDeleteHandler<T>` | `(id: string, data: T) => Promise<SyncHandlerResult> \| SyncHandlerResult` |
-| `ServerSyncHandlerConfig<T, Q>` | Config with `schema`, `querySchema`, and handlers |
-| `ServerSyncHandler<T, Q>` | Result with `handler`, `fetchItems`, `processChanges`, etc. |
+| Type                            | Description                                                                |
+| ------------------------------- | -------------------------------------------------------------------------- |
+| `ServerFetchHandler<T, Q>`      | `(query: Q) => Promise<T[]> \| T[]`                                        |
+| `ServerCreateHandler<T>`        | `(data: T) => Promise<SyncHandlerResult> \| SyncHandlerResult`             |
+| `ServerUpdateHandler<T>`        | `(id: string, data: T) => Promise<SyncHandlerResult> \| SyncHandlerResult` |
+| `ServerDeleteHandler<T>`        | `(id: string, data: T) => Promise<SyncHandlerResult> \| SyncHandlerResult` |
+| `ServerSyncHandlerConfig<T, Q>` | Config with `schema`, `querySchema`, and handlers                          |
+| `ServerSyncHandler<T, Q>`       | Result with `handler`, `fetchItems`, `processChanges`, etc.                |
