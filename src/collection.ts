@@ -10,6 +10,8 @@ import type {
   SyncQueueState,
   FetchState,
   IdMapping,
+  Change,
+  SyncResult,
 } from "./types";
 
 export type CollectionState<T, C> = {
@@ -64,10 +66,14 @@ export class Collection<T, C> {
     this.config = config;
 
     // Initialize SyncQueue
+    // Default no-op sync handler for offline-first mode (all operations succeed locally)
+    const defaultOnSync = async (changes: Change<T>[]): Promise<SyncResult[]> =>
+      changes.map((c) => ({ id: c.id, status: "success" as const }));
+
     this._syncQueue = new SyncQueue<T>({
       debounce: config.syncDebounce ?? 300,
       maxRetries: config.syncRetries ?? 3,
-      onSync: config.onSync,
+      onSync: config.onSync ?? defaultOnSync,
       onIdRemap: (mappings) => this._handleIdRemap(mappings),
     });
 

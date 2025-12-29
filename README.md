@@ -26,6 +26,21 @@ yarn add use-abcd
 bun add use-abcd
 ```
 
+## Package Exports
+
+The package provides multiple entry points:
+
+```typescript
+// Main package - React hooks and client-side sync utilities
+import { useCrud, Collection, createSyncClient } from "use-abcd";
+
+// Runtime client - Client & server sync utilities (for isomorphic code)
+import { createSyncClient, createSyncServer } from "use-abcd/runtime/client";
+
+// Runtime server - Server-side sync utilities only
+import { createSyncServer, serverSyncSuccess } from "use-abcd/runtime/server";
+```
+
 ## Quick Start
 
 ```typescript

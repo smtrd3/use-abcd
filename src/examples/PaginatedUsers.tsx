@@ -1,5 +1,6 @@
 import React, { useCallback, useState, useEffect } from "react";
-import { useCrud, type Config, type SyncResult } from "../useCrud";
+import { useCrud, type Config } from "../useCrud";
+import { createSyncClient, fetchToSyncResult } from "../runtime";
 
 interface User {
   id: string;
@@ -58,53 +59,45 @@ const UsersConfig: Config<User, UserContext> = {
     return data.items;
   },
 
-  onSync: async (changes, signal) => {
-    const results: SyncResult[] = [];
+  onSync: createSyncClient<User>({
+    create: async (data, signal) => {
+      return fetchToSyncResult({
+        fetch: fetch("/api/users", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data),
+          signal,
+        }),
+        parseResponse: async (response) => {
+          const result = await response.json();
+          return { newId: result.id };
+        },
+        parseError: "Failed to create user",
+      });
+    },
 
-    for (const change of changes) {
-      try {
-        if (change.type === "create") {
-          const response = await fetch("/api/users", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(change.data),
-            signal,
-          });
+    update: async (id, data, signal) => {
+      return fetchToSyncResult({
+        fetch: fetch(`/api/users/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data),
+          signal,
+        }),
+        parseError: "Failed to update user",
+      });
+    },
 
-          if (!response.ok) throw new Error("Failed to create user");
-          const data = await response.json();
-          // Return newId so the library can remap the temporary ID to the server-assigned ID
-          results.push({ id: change.id, status: "success", newId: data.id });
-        } else if (change.type === "update") {
-          const response = await fetch(`/api/users/${change.id}`, {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(change.data),
-            signal,
-          });
-
-          if (!response.ok) throw new Error("Failed to update user");
-          results.push({ id: change.id, status: "success" });
-        } else if (change.type === "delete") {
-          const response = await fetch(`/api/users/${change.id}`, {
-            method: "DELETE",
-            signal,
-          });
-
-          if (!response.ok) throw new Error("Failed to delete user");
-          results.push({ id: change.id, status: "success" });
-        }
-      } catch (error) {
-        results.push({
-          id: change.id,
-          status: "error",
-          error: error instanceof Error ? error.message : "Unknown error",
-        });
-      }
-    }
-
-    return results;
-  },
+    delete: async (id, _data, signal) => {
+      return fetchToSyncResult({
+        fetch: fetch(`/api/users/${id}`, {
+          method: "DELETE",
+          signal,
+        }),
+        parseError: "Failed to delete user",
+      });
+    },
+  }).onSync,
 };
 
 export const PaginatedUsers = React.memo(function PaginatedUsers() {

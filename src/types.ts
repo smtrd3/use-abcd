@@ -86,5 +86,5 @@ export type Config<T, C> = {
 
   // Handlers
   onFetch: (context: C, signal: AbortSignal) => Promise<T[]>;
-  onSync: (changes: Change<T>[], signal: AbortSignal) => Promise<SyncResult[]>;
+  onSync?: (changes: Change<T>[], signal: AbortSignal) => Promise<SyncResult[]>;
 };

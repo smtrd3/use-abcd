@@ -8,13 +8,19 @@ export default defineConfig({
   build: {
     sourcemap: true,
     lib: {
-      entry: resolve(__dirname, "src/index.ts"),
-      name: "useAbcd",
+      entry: {
+        index: resolve(__dirname, "src/index.ts"),
+        "runtime/client": resolve(__dirname, "src/runtime/index.ts"),
+        "runtime/server": resolve(__dirname, "src/runtime/server.ts"),
+      },
       formats: ["es"],
-      fileName: "index",
     },
     rollupOptions: {
       external: ["react", "react-dom"],
+      output: {
+        entryFileNames: "[name].js",
+        chunkFileNames: "chunks/[name]-[hash].js",
+      },
     },
   },
   plugins: [
@@ -23,7 +29,6 @@ export default defineConfig({
       outDir: "dist",
       tsconfigPath: "./tsconfig.build.json",
       exclude: ["src/__tests__"],
-      rollupTypes: true,
     }),
   ],
 });

@@ -10,6 +10,14 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./runtime/client": {
+      "types": "./dist/runtime/client.d.ts",
+      "import": "./dist/runtime/client.js"
+    },
+    "./runtime/server": {
+      "types": "./dist/runtime/server.d.ts",
+      "import": "./dist/runtime/server.js"
     }
   },
   "main": "./dist/index.js",
