@@ -291,6 +291,15 @@ export class Collection<T, C> {
     }
   }
 
+  // Cleanup everything and remove from global cache
+  destroy(): void {
+    this._syncQueue.destroy();
+    this._fetchHandler.destroy();
+    this._itemCache.clear();
+    this._subscribers.clear();
+    Collection._cache.delete(this.id);
+  }
+
   // Private methods
   private async _initialFetch(): Promise<void> {
     if (this._hasInitialized) return;

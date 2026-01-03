@@ -109,6 +109,15 @@ export class FetchHandler<T, C> {
     this._cache.invalidate(this._getCacheKey(context));
   }
 
+  destroy(): void {
+    this._abortController?.abort("FetchHandler destroyed");
+    this._abortController = null;
+    this._cache.clear();
+    this._subscribers.clear();
+    this._currentContext = null;
+    this._state = { status: "idle", items: [] };
+  }
+
   getState = (): FetchHandlerState<T> => this._state;
   getContext = (): C | null => this._currentContext;
   isFetching = (): boolean => this._state.status === "fetching";

@@ -92,7 +92,7 @@ describe("createSyncServer", () => {
 
     it("accepts POST requests", async () => {
       const handler = createSyncServer<TestItem, TestQuery>({
-        fetch: () => mockItems,
+        fetch: (_query, _ctx) => mockItems,
       });
       const request = createRequest<TestItem, TestQuery>({ query: { page: 1, limit: 10 } });
 
@@ -146,7 +146,7 @@ describe("createSyncServer", () => {
 
     it("rejects non-array changes with 400", async () => {
       const handler = createSyncServer<TestItem>({
-        create: () => serverSyncSuccess(),
+        create: (_data, _ctx) => serverSyncSuccess(),
       });
       const request = new Request("http://localhost/api/items", {
         method: "POST",
@@ -165,7 +165,7 @@ describe("createSyncServer", () => {
   describe("Fetch Operations (Query)", () => {
     it("returns items when query is provided", async () => {
       const handler = createSyncServer<TestItem, TestQuery>({
-        fetch: () => mockItems,
+        fetch: (_query, _ctx) => mockItems,
       });
       const request = createRequest<TestItem, TestQuery>({ query: { page: 1, limit: 10 } });
 
@@ -176,7 +176,7 @@ describe("createSyncServer", () => {
       expect(body.results).toEqual(mockItems);
     });
 
-    it("passes query to fetch handler", async () => {
+    it("passes query and context to fetch handler", async () => {
       const fetchFn = vi.fn().mockReturnValue(mockItems);
       const handler = createSyncServer<TestItem, TestQuery>({
         fetch: fetchFn,
@@ -186,7 +186,7 @@ describe("createSyncServer", () => {
 
       await handler.handler(request);
 
-      expect(fetchFn).toHaveBeenCalledWith(query);
+      expect(fetchFn).toHaveBeenCalledWith(query, { body: { query } });
     });
 
     it("returns 501 when fetch handler not configured", async () => {
@@ -202,7 +202,7 @@ describe("createSyncServer", () => {
 
     it("handles async fetch handler", async () => {
       const handler = createSyncServer<TestItem, TestQuery>({
-        fetch: async () => {
+        fetch: async (_query, _ctx) => {
           await new Promise((r) => setTimeout(r, 10));
           return mockItems;
         },
@@ -218,7 +218,7 @@ describe("createSyncServer", () => {
 
     it("handles fetch handler errors gracefully", async () => {
       const handler = createSyncServer<TestItem, TestQuery>({
-        fetch: () => {
+        fetch: (_query, _ctx) => {
           throw new Error("Database connection failed");
         },
       });
@@ -243,7 +243,7 @@ describe("createSyncServer", () => {
 
       const handler = createSyncServer<TestItem, TestQuery>({
         querySchema,
-        fetch: () => mockItems,
+        fetch: (_query, _ctx) => mockItems,
       });
 
       const validRequest = createRequest<TestItem, TestQuery>({ query: { page: 1, limit: 10 } });
@@ -260,7 +260,7 @@ describe("createSyncServer", () => {
 
       const handler = createSyncServer<TestItem, TestQuery>({
         querySchema,
-        fetch: () => mockItems,
+        fetch: (_query, _ctx) => mockItems,
       });
 
       const request = new Request("http://localhost/api/items", {
@@ -294,14 +294,17 @@ describe("createSyncServer", () => {
 
       await handler.handler(request);
 
-      expect(fetchFn).toHaveBeenCalledWith(expect.objectContaining({ validated: true }));
+      expect(fetchFn).toHaveBeenCalledWith(
+        expect.objectContaining({ validated: true }),
+        expect.objectContaining({ body: expect.any(Object) }),
+      );
     });
   });
 
   describe("Create Operations", () => {
     it("processes create change successfully", async () => {
       const handler = createSyncServer<TestItem>({
-        create: (data) => serverSyncSuccess({ newId: `new-${data.name}` }),
+        create: (data, _ctx) => serverSyncSuccess({ newId: `new-${data.name}` }),
       });
       const request = createRequest<TestItem, unknown>({
         changes: [{ id: "temp-1", type: "create", data: { id: "temp-1", name: "New Item" } }],
@@ -321,7 +324,7 @@ describe("createSyncServer", () => {
 
     it("handles create error", async () => {
       const handler = createSyncServer<TestItem>({
-        create: () => serverSyncError("Duplicate entry"),
+        create: (_data, _ctx) => serverSyncError("Duplicate entry"),
       });
       const request = createRequest<TestItem, unknown>({
         changes: [{ id: "temp-1", type: "create", data: { id: "temp-1", name: "New Item" } }],
@@ -370,12 +373,16 @@ describe("createSyncServer", () => {
 
       expect(response.status).toBe(200);
       expect(body.syncResults[0]).toEqual({ id: "1", status: "success" });
-      expect(updateFn).toHaveBeenCalledWith("1", { id: "1", name: "Updated Item" });
+      expect(updateFn).toHaveBeenCalledWith(
+        "1",
+        { id: "1", name: "Updated Item" },
+        expect.objectContaining({ body: expect.any(Object) }),
+      );
     });
 
     it("handles update error", async () => {
       const handler = createSyncServer<TestItem>({
-        update: () => serverSyncError("Item not found"),
+        update: (_id, _data, _ctx) => serverSyncError("Item not found"),
       });
       const request = createRequest<TestItem, unknown>({
         changes: [{ id: "999", type: "update", data: { id: "999", name: "Updated" } }],
@@ -418,12 +425,16 @@ describe("createSyncServer", () => {
       const body = await response.json();
 
       expect(body.syncResults[0]).toEqual({ id: "1", status: "success" });
-      expect(deleteFn).toHaveBeenCalledWith("1", { id: "1", name: "Item 1" });
+      expect(deleteFn).toHaveBeenCalledWith(
+        "1",
+        { id: "1", name: "Item 1" },
+        expect.objectContaining({ body: expect.any(Object) }),
+      );
     });
 
     it("handles delete error", async () => {
       const handler = createSyncServer<TestItem>({
-        delete: () => serverSyncError("Cannot delete: has dependencies"),
+        delete: (_id, _data, _ctx) => serverSyncError("Cannot delete: has dependencies"),
       });
       const request = createRequest<TestItem, unknown>({
         changes: [{ id: "1", type: "delete", data: { id: "1", name: "Item 1" } }],
@@ -457,7 +468,7 @@ describe("createSyncServer", () => {
 
       const handler = createSyncServer<TestItem>({
         schema,
-        create: () => serverSyncSuccess({ newId: "new-1" }),
+        create: (_data, _ctx) => serverSyncSuccess({ newId: "new-1" }),
       });
       const request = createRequest<TestItem, unknown>({
         changes: [{ id: "temp-1", type: "create", data: { id: "temp-1", name: "Valid Item" } }],
@@ -478,7 +489,7 @@ describe("createSyncServer", () => {
 
       const handler = createSyncServer<TestItem>({
         schema,
-        create: () => serverSyncSuccess({ newId: "new-1" }),
+        create: (_data, _ctx) => serverSyncSuccess({ newId: "new-1" }),
       });
       const request = createRequest<TestItem, unknown>({
         changes: [
@@ -504,7 +515,7 @@ describe("createSyncServer", () => {
 
       const handler = createSyncServer<TestItem>({
         schema,
-        create: () => serverSyncSuccess({ newId: "new" }),
+        create: (_data, _ctx) => serverSyncSuccess({ newId: "new" }),
       });
       const request = createRequest<TestItem, unknown>({
         changes: [
@@ -527,7 +538,7 @@ describe("createSyncServer", () => {
     it("processes multiple changes in parallel", async () => {
       const createOrder: string[] = [];
       const handler = createSyncServer<TestItem>({
-        create: async (data) => {
+        create: async (data, _ctx) => {
           await new Promise((r) => setTimeout(r, Math.random() * 10));
           createOrder.push(data.id);
           return serverSyncSuccess({ newId: data.id });
@@ -550,9 +561,9 @@ describe("createSyncServer", () => {
 
     it("handles mixed operation types", async () => {
       const handler = createSyncServer<TestItem>({
-        create: () => serverSyncSuccess({ newId: "new-1" }),
-        update: () => serverSyncSuccess(),
-        delete: () => serverSyncSuccess(),
+        create: (_data, _ctx) => serverSyncSuccess({ newId: "new-1" }),
+        update: (_id, _data, _ctx) => serverSyncSuccess(),
+        delete: (_id, _data, _ctx) => serverSyncSuccess(),
       });
       const request = createRequest<TestItem, unknown>({
         changes: [
@@ -572,7 +583,7 @@ describe("createSyncServer", () => {
 
     it("continues processing after individual failures", async () => {
       const handler = createSyncServer<TestItem>({
-        create: (data) =>
+        create: (data, _ctx) =>
           data.name === "fail" ? serverSyncError("Failed") : serverSyncSuccess({ newId: data.id }),
       });
       const request = createRequest<TestItem, unknown>({
@@ -719,32 +730,36 @@ describe("createSyncServer", () => {
   describe("Direct Method Access", () => {
     it("fetchItems works directly", async () => {
       const handler = createSyncServer<TestItem, TestQuery>({
-        fetch: (query) => mockItems.slice(0, query.limit),
+        fetch: (query, _ctx) => mockItems.slice(0, query.limit),
       });
+      const query = { page: 1, limit: 2 };
+      const ctx = { body: { query } };
 
-      const items = await handler.fetchItems({ page: 1, limit: 2 });
+      const items = await handler.fetchItems(query, ctx);
 
       expect(items).toEqual(mockItems.slice(0, 2));
     });
 
     it("fetchItems throws when not configured", async () => {
       const handler = createSyncServer<TestItem, TestQuery>({});
+      const query = { page: 1, limit: 10 };
+      const ctx = { body: { query } };
 
-      await expect(handler.fetchItems({ page: 1, limit: 10 })).rejects.toThrow(
-        "Fetch handler not configured",
-      );
+      await expect(handler.fetchItems(query, ctx)).rejects.toThrow("Fetch handler not configured");
     });
 
     it("processChanges works directly", async () => {
       const handler = createSyncServer<TestItem>({
-        create: () => serverSyncSuccess({ newId: "new-1" }),
-        update: () => serverSyncSuccess(),
+        create: (_data, _ctx) => serverSyncSuccess({ newId: "new-1" }),
+        update: (_id, _data, _ctx) => serverSyncSuccess(),
       });
+      const changes = [
+        { id: "temp-1", type: "create" as const, data: { id: "temp-1", name: "New" } },
+        { id: "1", type: "update" as const, data: { id: "1", name: "Updated" } },
+      ];
+      const ctx = { body: { changes } };
 
-      const results = await handler.processChanges([
-        { id: "temp-1", type: "create", data: { id: "temp-1", name: "New" } },
-        { id: "1", type: "update", data: { id: "1", name: "Updated" } },
-      ]);
+      const results = await handler.processChanges(changes, ctx);
 
       expect(results).toHaveLength(2);
       expect(results[0].status).toBe("success");
@@ -753,14 +768,16 @@ describe("createSyncServer", () => {
 
     it("processChangesWithStats returns categorized results", async () => {
       const handler = createSyncServer<TestItem>({
-        create: (data) =>
+        create: (data, _ctx) =>
           data.name === "fail" ? serverSyncError("Failed") : serverSyncSuccess({ newId: data.id }),
       });
+      const changes = [
+        { id: "1", type: "create" as const, data: { id: "1", name: "success" } },
+        { id: "2", type: "create" as const, data: { id: "2", name: "fail" } },
+      ];
+      const ctx = { body: { changes } };
 
-      const batchResult = await handler.processChangesWithStats([
-        { id: "1", type: "create", data: { id: "1", name: "success" } },
-        { id: "2", type: "create", data: { id: "2", name: "fail" } },
-      ]);
+      const batchResult = await handler.processChangesWithStats(changes, ctx);
 
       expect(batchResult.results).toHaveLength(2);
       expect(batchResult.successful).toHaveLength(1);
@@ -772,10 +789,10 @@ describe("createSyncServer", () => {
 
     it("handlers object exposes individual handlers", () => {
       const config: ServerSyncHandlerConfig<TestItem, TestQuery> = {
-        fetch: () => mockItems,
-        create: () => serverSyncSuccess(),
-        update: () => serverSyncSuccess(),
-        delete: () => serverSyncSuccess(),
+        fetch: (_query, _ctx) => mockItems,
+        create: (_data, _ctx) => serverSyncSuccess(),
+        update: (_id, _data, _ctx) => serverSyncSuccess(),
+        delete: (_id, _data, _ctx) => serverSyncSuccess(),
       };
 
       const handler = createSyncServer<TestItem, TestQuery>(config);

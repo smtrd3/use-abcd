@@ -169,6 +169,7 @@ export function syncError(error: string): SyncHandlerResult {
 export type EndpointSyncClientConfig = {
   endpoint: string;
   headers?: Record<string, string>;
+  scope?: string;
 };
 
 export type EndpointSyncClient<T, Q = unknown> = {
@@ -181,6 +182,7 @@ export function createSyncClientFromEndpoint<T, Q = unknown>(
 ): EndpointSyncClient<T, Q> {
   const endpoint = typeof config === "string" ? config : config.endpoint;
   const headers = typeof config === "string" ? {} : (config.headers ?? {});
+  const scope = typeof config === "string" ? undefined : config.scope;
 
   const onFetch = async (query: Q, signal: AbortSignal): Promise<T[]> => {
     if (signal.aborted) {
@@ -188,7 +190,7 @@ export function createSyncClientFromEndpoint<T, Q = unknown>(
     }
 
     try {
-      const body: SyncRequestBody<T, Q> = { query };
+      const body: SyncRequestBody<T, Q> = { scope, query };
       const response = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...headers },
@@ -227,7 +229,7 @@ export function createSyncClientFromEndpoint<T, Q = unknown>(
     }
 
     try {
-      const body: SyncRequestBody<T, Q> = { changes };
+      const body: SyncRequestBody<T, Q> = { scope, changes };
       const response = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...headers },

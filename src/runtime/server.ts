@@ -16,36 +16,52 @@ export { categorizeResults };
 // Types
 // ============================================================================
 
-export type ServerFetchHandler<T, Q> = (query: Q) => Promise<T[]> | T[];
-export type ServerCreateHandler<T> = (data: T) => Promise<SyncHandlerResult> | SyncHandlerResult;
-export type ServerUpdateHandler<T> = (
-  id: string,
+/** Context passed to all handlers containing the parsed request body */
+export type ServerHandlerContext<T, Q = unknown> = {
+  body: SyncRequestBody<T, Q>;
+};
+
+export type ServerFetchHandler<T, Q> = (
+  query: Q,
+  ctx: ServerHandlerContext<T, Q>,
+) => Promise<T[]> | T[];
+export type ServerCreateHandler<T, Q = unknown> = (
   data: T,
+  ctx: ServerHandlerContext<T, Q>,
 ) => Promise<SyncHandlerResult> | SyncHandlerResult;
-export type ServerDeleteHandler<T> = (
+export type ServerUpdateHandler<T, Q = unknown> = (
   id: string,
   data: T,
+  ctx: ServerHandlerContext<T, Q>,
+) => Promise<SyncHandlerResult> | SyncHandlerResult;
+export type ServerDeleteHandler<T, Q = unknown> = (
+  id: string,
+  data: T,
+  ctx: ServerHandlerContext<T, Q>,
 ) => Promise<SyncHandlerResult> | SyncHandlerResult;
 
 export type ServerSyncHandlerConfig<T, Q = unknown> = {
   schema?: Schema<T>;
   querySchema?: Schema<Q>;
   fetch?: ServerFetchHandler<T, Q>;
-  create?: ServerCreateHandler<T>;
-  update?: ServerUpdateHandler<T>;
-  delete?: ServerDeleteHandler<T>;
+  create?: ServerCreateHandler<T, Q>;
+  update?: ServerUpdateHandler<T, Q>;
+  delete?: ServerDeleteHandler<T, Q>;
 };
 
 export type ServerSyncHandler<T, Q = unknown> = {
   handler: (request: Request) => Promise<Response>;
-  fetchItems: (query: Q) => Promise<T[]>;
-  processChanges: (changes: Change<T>[]) => Promise<SyncResult[]>;
-  processChangesWithStats: (changes: Change<T>[]) => Promise<SyncBatchResult>;
+  fetchItems: (query: Q, ctx: ServerHandlerContext<T, Q>) => Promise<T[]>;
+  processChanges: (changes: Change<T>[], ctx: ServerHandlerContext<T, Q>) => Promise<SyncResult[]>;
+  processChangesWithStats: (
+    changes: Change<T>[],
+    ctx: ServerHandlerContext<T, Q>,
+  ) => Promise<SyncBatchResult>;
   handlers: {
     fetch?: ServerFetchHandler<T, Q>;
-    create?: ServerCreateHandler<T>;
-    update?: ServerUpdateHandler<T>;
-    delete?: ServerDeleteHandler<T>;
+    create?: ServerCreateHandler<T, Q>;
+    update?: ServerUpdateHandler<T, Q>;
+    delete?: ServerDeleteHandler<T, Q>;
   };
 };
 
@@ -82,6 +98,7 @@ type ChangeProcessor<T, Q> = {
   execute: (
     change: Change<T>,
     config: ServerSyncHandlerConfig<T, Q>,
+    ctx: ServerHandlerContext<T, Q>,
   ) => Promise<SyncHandlerResult> | SyncHandlerResult;
   toResult: (change: Change<T>, result: SyncHandlerResult) => SyncResult;
   notConfiguredError: string;
@@ -91,7 +108,7 @@ function createChangeProcessors<T, Q>(): Record<string, ChangeProcessor<T, Q>> {
   return {
     create: {
       guard: (config) => !!config.create,
-      execute: (change, config) => config.create!(change.data),
+      execute: (change, config, ctx) => config.create!(change.data, ctx),
       toResult: (change, result) =>
         result.success === true
           ? { id: change.id, status: "success" as const, newId: result.newId }
@@ -101,7 +118,7 @@ function createChangeProcessors<T, Q>(): Record<string, ChangeProcessor<T, Q>> {
 
     update: {
       guard: (config) => !!config.update,
-      execute: (change, config) => config.update!(change.id, change.data),
+      execute: (change, config, ctx) => config.update!(change.id, change.data, ctx),
       toResult: (change, result) =>
         result.success === true
           ? { id: change.id, status: "success" as const }
@@ -111,7 +128,7 @@ function createChangeProcessors<T, Q>(): Record<string, ChangeProcessor<T, Q>> {
 
     delete: {
       guard: (config) => !!config.delete,
-      execute: (change, config) => config.delete!(change.id, change.data),
+      execute: (change, config, ctx) => config.delete!(change.id, change.data, ctx),
       toResult: (change, result) =>
         result.success === true
           ? { id: change.id, status: "success" as const }
@@ -136,6 +153,7 @@ function validateData<T>(
 async function processServerChange<T, Q>(
   change: Change<T>,
   config: ServerSyncHandlerConfig<T, Q>,
+  ctx: ServerHandlerContext<T, Q>,
 ): Promise<SyncResult> {
   const processors = createChangeProcessors<T, Q>();
   const processor = processors[change.type];
@@ -154,7 +172,7 @@ async function processServerChange<T, Q>(
   }
 
   try {
-    const result = await processor.execute({ ...change, data: validation.data }, config);
+    const result = await processor.execute({ ...change, data: validation.data }, config, ctx);
     return processor.toResult(change, result);
   } catch (error) {
     return {
@@ -180,17 +198,23 @@ export function serverSyncError(error: string): SyncHandlerResult {
 export function createSyncServer<T, Q = unknown>(
   config: ServerSyncHandlerConfig<T, Q>,
 ): ServerSyncHandler<T, Q> {
-  const fetchItems = async (query: Q): Promise<T[]> => {
+  const fetchItems = async (query: Q, ctx: ServerHandlerContext<T, Q>): Promise<T[]> => {
     if (!config.fetch) throw new Error("Fetch handler not configured");
-    return config.fetch(query);
+    return config.fetch(query, ctx);
   };
 
-  const processChanges = async (changes: Change<T>[]): Promise<SyncResult[]> => {
-    return Promise.all(changes.map((change) => processServerChange(change, config)));
+  const processChanges = async (
+    changes: Change<T>[],
+    ctx: ServerHandlerContext<T, Q>,
+  ): Promise<SyncResult[]> => {
+    return Promise.all(changes.map((change) => processServerChange(change, config, ctx)));
   };
 
-  const processChangesWithStats = async (changes: Change<T>[]): Promise<SyncBatchResult> => {
-    const results = await processChanges(changes);
+  const processChangesWithStats = async (
+    changes: Change<T>[],
+    ctx: ServerHandlerContext<T, Q>,
+  ): Promise<SyncBatchResult> => {
+    const results = await processChanges(changes, ctx);
     return categorizeResults(results);
   };
 
@@ -206,6 +230,7 @@ export function createSyncServer<T, Q = unknown>(
       return responses.invalidPayload();
     }
 
+    const ctx: ServerHandlerContext<T, Q> = { body };
     const responseBody: SyncResponseBody<T> = {};
 
     if (body.query !== undefined) {
@@ -214,12 +239,12 @@ export function createSyncServer<T, Q = unknown>(
       const validation = validateData<Q>(body.query, config.querySchema);
       if (validation.valid === false) return responses.validationError(validation.error);
 
-      responseBody.results = await fetchItems(validation.data);
+      responseBody.results = await fetchItems(validation.data, ctx);
     }
 
     if (body.changes !== undefined) {
       if (!Array.isArray(body.changes)) return responses.invalidPayload();
-      responseBody.syncResults = await processChanges(body.changes);
+      responseBody.syncResults = await processChanges(body.changes, ctx);
     }
 
     return responses.success(responseBody);

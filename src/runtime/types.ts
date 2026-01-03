@@ -73,6 +73,8 @@ export function categorizeResults(results: SyncResult[]): SyncBatchResult {
  * Request body for the unified POST endpoint
  */
 export type SyncRequestBody<T, Q = unknown> = {
+  /** Optional scope identifier for selecting storage on the backend */
+  scope?: string;
   /** Query parameters for fetching items */
   query?: Q;
   /** Changes to sync */

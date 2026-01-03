@@ -94,17 +94,17 @@ describe("Collection E2E with MSW and createSyncServer", () => {
   // Helper to create sync server with current db state
   const createSyncServerInstance = () =>
     createSyncServer<User, UserQuery>({
-      fetch: (query) => db.query(query),
-      create: (data) => {
+      fetch: (query, _ctx) => db.query(query),
+      create: (data, _ctx) => {
         const user = db.create(data);
         return serverSyncSuccess({ newId: user.id });
       },
-      update: (id, data) => {
+      update: (id, data, _ctx) => {
         const user = db.update(id, data);
         if (!user) return serverSyncError("User not found");
         return serverSyncSuccess();
       },
-      delete: (id) => {
+      delete: (id, _data, _ctx) => {
         const success = db.delete(id);
         if (!success) return serverSyncError("User not found");
         return serverSyncSuccess();

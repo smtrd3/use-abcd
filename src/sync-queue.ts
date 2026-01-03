@@ -112,6 +112,20 @@ export class SyncQueue<T> {
     });
   }
 
+  destroy(): void {
+    this._clearTimer();
+    this._abortController?.abort("SyncQueue destroyed");
+    this._abortController = null;
+    this._subscribers.clear();
+    this._state = {
+      queue: new Map(),
+      inFlight: new Map(),
+      errors: new Map(),
+      isPaused: false,
+      isSyncing: false,
+    };
+  }
+
   getState(): SyncQueueState<T> {
     return this._state;
   }
