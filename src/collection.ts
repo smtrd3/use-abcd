@@ -234,14 +234,20 @@ export class Collection<T, C> {
     this._syncQueue.enqueue({ id, type: "delete", data: item });
   }
 
-  // Get Item reference (cached)
+  // Get Item reference (cached) - automatically retains the item
   getItem(id: string): Item<T, C> {
     let item = this._itemCache.get(id);
     if (!item) {
       item = new Item(this, id);
       this._itemCache.set(id, item);
     }
+    item._retain();
     return item;
+  }
+
+  // Release item from cache when ref count reaches zero
+  _releaseItem(id: string): void {
+    this._itemCache.delete(id);
   }
 
   // Update context and refetch

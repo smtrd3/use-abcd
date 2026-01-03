@@ -7,10 +7,27 @@ export class Item<T, C = unknown> {
   private _collection: Collection<T, C>;
   private _id: string;
   private _cachedStatus: ItemStatus = null;
+  private _refCount = 0;
 
   constructor(collection: Collection<T, C>, id: string) {
     this._collection = collection;
     this._id = id;
+  }
+
+  // Reference counting for lifecycle management
+  _retain(): void {
+    this._refCount++;
+  }
+
+  _release(): void {
+    this._refCount--;
+    if (this._refCount <= 0) {
+      this._collection._releaseItem(this._id);
+    }
+  }
+
+  get refCount(): number {
+    return this._refCount;
   }
 
   get id(): string {

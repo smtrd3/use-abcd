@@ -13,6 +13,7 @@ export type {
   SyncState,
   ChangeType,
   ItemSyncStatus,
+  FetchState,
 } from "./types";
 
 export function useCrud<T, C>(config: Config<T, C>) {
@@ -32,6 +33,8 @@ export function useCrud<T, C>(config: Config<T, C>) {
     syncQueue: state.syncQueue,
     loading: state.loading,
     syncing: state.syncing,
+    fetchStatus: state.fetchStatus,
+    fetchError: state.fetchError,
 
     // Item operations
     create: (item: T) => collection.create(item),
