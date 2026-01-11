@@ -2,6 +2,8 @@
 
 [![Build Status](https://github.com/smtrd3/common-state/workflows/CI/badge.svg)](https://github.com/smtrd3/common-state/actions)
 
+Most apps on the internet are some form of CRUD - whether it's a todo list, a dashboard, or a social media feed. Yet we often find ourselves fighting with complex state management frameworks, reinventing patterns for each project. What if we inverted the problem? Instead of building custom state management, recognize that your app state is likely CRUD at its core. This library provides highly optimized, systematic CRUD state management that makes your code easier to reason about and your life as a developer much simpler. You don't need to invent state management for each app - chances are, it's just CRUD.
+
 A powerful React hook for managing ABCD (or CRUD) operations with optimistic updates, caching, and automatic state management.
 
 > **Note on Package Name**: The package is published as `use-abcd` on npm due to naming availability, where ABCD stands for Add, Browse, Change, and Delete - which maps directly to the traditional CRUD (Create, Read, Update, Delete) operations. While the package name uses ABCD, all internal APIs and documentation use CRUD terminology for familiarity and consistency with common programming patterns.
@@ -15,6 +17,7 @@ A powerful React hook for managing ABCD (or CRUD) operations with optimistic upd
 - ⏳ Debounced sync with configurable delays
 - 🔄 Sync queue management with pause/resume/retry
 - 🎨 Context-based filtering and pagination
+- 🔌 End-to-end type-safe client-server sync utilities
 
 ## Installation
 
@@ -88,10 +91,11 @@ function TodoList() {
 The `Config` object defines how your data is fetched, synced, and managed:
 
 ```typescript
-type Config<T, C> = {
+type Config<T extends object, C> = {
   id: string;                    // Unique identifier for this collection
   initialContext: C;             // Initial context (filters, pagination, etc.)
   getId: (item: T) => string;    // Extract ID from item
+  setId?: (item: T, newId: string) => T;  // Optional: for ID remapping on create
 
   // Optional sync configuration
   syncDebounce?: number;         // Debounce delay for sync (default: 300ms)
@@ -103,7 +107,7 @@ type Config<T, C> = {
 
   // Required handlers
   onFetch: (context: C, signal: AbortSignal) => Promise<T[]>;
-  onSync: (changes: Change<T>[], signal: AbortSignal) => Promise<SyncResult[]>;
+  onSync?: (changes: Change<T>[], signal: AbortSignal) => Promise<SyncResult[]>;
 };
 ```
 
@@ -119,7 +123,6 @@ The `useCrud` hook returns:
   loading: boolean;              // Fetch loading state
   syncing: boolean;              // Sync in progress
   syncQueue: SyncQueueState<T>;  // Sync queue state
-  syncState: SyncState;          // Overall sync state
 
   // Item operations (optimistic)
   create: (item: T) => void;
@@ -141,126 +144,63 @@ The `useCrud` hook returns:
 
 ## Examples
 
-The repository includes comprehensive examples demonstrating various use cases:
+The repository includes examples demonstrating various use cases:
 
-### 1. Full CRUD Operations (Products Example)
+- **Products** - Full CRUD with filtering, search, and error handling
+- **Pagination** - Context-based pagination with dynamic page size
+- **Optimistic Updates** - Comments with instant UI feedback and sync queue visualization
+- **Blog Post** - Simple single-item editing
+- **Todo List** - Basic list operations
 
-Demonstrates complete CRUD functionality with:
-- Create, read, update, delete operations
-- Category filtering and search
-- Sync queue management
-- Error handling with retries
-- Per-item status indicators
-
-```typescript
-const ProductsConfig: Config<Product, ProductContext> = {
-  id: "products",
-  initialContext: { page: 1, limit: 10 },
-  getId: (item) => item.id,
-
-  onFetch: async (context, signal) => {
-    const params = new URLSearchParams({
-      page: String(context.page),
-      limit: String(context.limit),
-    });
-    if (context.category) params.append("category", context.category);
-    if (context.search) params.append("search", context.search);
-
-    const response = await fetch(`/api/products?${params}`, { signal });
-    return (await response.json()).items;
-  },
-
-  onSync: async (changes, signal) => {
-    // Handle batch sync operations
-  },
-};
-```
-
-**Key features:**
-- Filtering by category
-- Text search
-- Pause/resume sync
-- Retry failed operations
-- Visual status indicators
-
-### 2. Pagination (Users Example)
-
-Shows context-based pagination with:
-- Dynamic page size selection
-- Next/previous navigation
-- Context updates trigger re-fetch
-
-```typescript
-interface UserContext {
-  page: number;
-  limit: number;
-}
-
-const { items, context, setContext } = useCrud<User, UserContext>(UsersConfig);
-
-// Change page
-setContext((draft) => {
-  draft.page += 1;
-});
-
-// Change items per page
-setContext((draft) => {
-  draft.limit = 20;
-  draft.page = 1; // Reset to first page
-});
-```
-
-**Key features:**
-- Configurable page size
-- Context-based pagination
-- Automatic re-fetch on context change
-
-### 3. Optimistic Updates (Comments Example)
-
-Demonstrates the power of optimistic updates:
-- Instant UI feedback
-- Background synchronization
-- Sync queue visualization
-- Manual retry controls
-- Error state handling
-
-```typescript
-const CommentsConfig: Config<Comment, CommentContext> = {
-  id: "comments-optimistic",
-  initialContext: { postId: "1" },
-  getId: (item) => item.id,
-  syncDebounce: 100, // Very short debounce for demo
-
-  // ... handlers
-};
-
-// Create appears instantly in UI
-create({
-  id: `temp-${Date.now()}`,
-  text: "New comment",
-  author: "You",
-  createdAt: new Date().toISOString(),
-});
-```
-
-**Key features:**
-- Immediate UI updates
-- Sync queue status display
-- Pause/resume synchronization
-- Per-item sync status
-- Manual retry for errors
-
-### 4. Original Examples
-
-The repository also includes the original simpler examples:
-- **Blog Post**: Single item editing with optimistic updates
-- **Todo List**: Simple list with toggle completion
+Run locally: `bun run dev` or `npm run dev` and visit `http://localhost:5173`
 
 ## Advanced Usage
 
-### Custom Context for Filtering
+### Individual Item Management
 
-Use context to manage filters, pagination, sorting, etc.:
+Use `getItem()` with `useItem()` for managing individual items:
+
+```typescript
+import { useCrud, useItem } from "use-abcd";
+
+function ProductList() {
+  const { items, getItem } = useCrud(ProductsConfig);
+
+  return (
+    <div>
+      {Array.from(items.keys()).map((id) => (
+        <ProductItem key={id} item={getItem(id)} />
+      ))}
+    </div>
+  );
+}
+
+function ProductItem({ item }: { item: Item<Product, ProductContext> }) {
+  const { data, status, update, remove, exists } = useItem(item);
+
+  if (!exists) return null;
+
+  return (
+    <div>
+      <h3>{data?.name}</h3>
+      <p>Status: {status?.status || "synced"}</p>
+      <button onClick={() => update((draft) => { draft.stock += 1; })}>
+        Add Stock
+      </button>
+      <button onClick={() => remove()}>Delete</button>
+    </div>
+  );
+}
+```
+
+**Benefits:**
+- `useItem()` subscribes only to that specific item's changes
+- React re-renders only when that item's data changes (automatic optimization via WeakMap cache)
+- Clean separation of list and item concerns
+
+### Context-Based Filtering & Pagination
+
+Use context to manage filters, pagination, sorting:
 
 ```typescript
 interface ProductContext {
@@ -268,228 +208,271 @@ interface ProductContext {
   limit: number;
   category?: string;
   search?: string;
-  sortBy?: "name" | "price";
 }
 
-const { context, setContext } = useCrud<Product, ProductContext>(config);
+const { items, context, setContext } = useCrud<Product, ProductContext>(config);
 
-// Update multiple context fields
+// Update context to refetch
 setContext((draft) => {
   draft.category = "electronics";
   draft.page = 1;
 });
 ```
 
-### Monitoring Sync Queue
+### Sync Queue Monitoring
 
 Track pending changes and errors:
 
 ```typescript
 const { syncQueue, pauseSync, resumeSync, retrySync } = useCrud(config);
 
+// Check queue state
 console.log({
   pending: syncQueue.queue.size,
   inFlight: syncQueue.inFlight.size,
   errors: syncQueue.errors.size,
-  isPaused: syncQueue.isPaused,
-  isSyncing: syncQueue.isSyncing,
 });
 
-// Pause sync temporarily
+// Control sync
 pauseSync();
-
-// Resume sync
 resumeSync();
-
-// Retry specific item
-retrySync(itemId);
-
-// Retry all failed items
-retrySync();
-```
-
-### Per-Item Status
-
-Track the sync status of individual items:
-
-```typescript
-const { getItemStatus } = useCrud(config);
-
-const status = getItemStatus(itemId);
-if (status) {
-  console.log({
-    type: status.type,        // "create" | "update" | "delete"
-    status: status.status,    // "pending" | "syncing" | "success" | "error"
-    retries: status.retries,  // Number of retry attempts
-    error: status.error,      // Error message if failed
-  });
-}
+retrySync(); // Retry all failed items
+retrySync(itemId); // Retry specific item
 ```
 
 ### ID Remapping for Optimistic Creates
 
-When creating items optimistically, you typically use a temporary ID (e.g., `temp-${Date.now()}`). After the server confirms the creation, it may assign a different permanent ID. The library automatically handles this ID remapping.
-
-**In your `onSync` handler**, return the server-assigned `newId` for create operations:
+Handle temporary IDs that get replaced by server-assigned IDs:
 
 ```typescript
 onSync: async (changes, signal) => {
-  const results: SyncResult[] = [];
-
   for (const change of changes) {
     if (change.type === "create") {
       const response = await fetch("/api/items", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(change.data),
         signal,
       });
-
-      if (!response.ok) throw new Error("Failed to create");
-
       const data = await response.json();
-      // Return newId to remap the temporary ID to the server-assigned ID
-      results.push({
-        id: change.id,        // The temporary ID
+
+      // Return newId to remap temp ID to server ID
+      return {
+        id: change.id,        // Temporary ID (e.g., "temp-123")
         status: "success",
-        newId: data.id,       // The server-assigned permanent ID
-      });
+        newId: data.id,       // Server-assigned ID (e.g., "456")
+      };
     }
     // ... handle update and delete
   }
-
-  return results;
 };
 ```
 
-**What happens automatically:**
-1. The item's key in the `items` Map is updated from `temp-123` to `server-456`
-2. The item's `id` property is updated (assumes item has an `id` field)
-3. Any `Item` references are updated to use the new ID
-4. The UI re-renders with the correct permanent ID
+The library automatically:
+1. Updates the item's key in the `items` Map
+2. Updates the item's `id` property
+3. Updates any `Item` references
+4. Triggers UI re-render
 
-**Custom ID field**: If your item uses a different property for the ID (not `id`), provide a `setId` function in your config:
+## End-to-End Type-Safe CRUD with createSyncClient & createSyncServer
+
+Build a complete type-safe CRUD solution with minimal boilerplate:
+
+### Client Setup
 
 ```typescript
-const config: Config<MyItem, Context> = {
-  getId: (item) => item.itemId,
-  setId: (item, newId) => ({ ...item, itemId: newId }),
-  // ...
+import { useCrud, createSyncClientFromEndpoint } from "use-abcd";
+
+interface User {
+  id: string;
+  name: string;
+  email: string;
+}
+
+interface UserQuery {
+  page: number;
+  limit: number;
+  search?: string;
+}
+
+const UserConfig: Config<User, UserQuery> = {
+  id: "users",
+  initialContext: { page: 1, limit: 10 },
+  getId: (user) => user.id,
+
+  // Use createSyncClientFromEndpoint for unified fetch + sync
+  ...createSyncClientFromEndpoint<User, UserQuery>("/api/users"),
 };
+
+function UserList() {
+  const { items, loading, create, update, remove, setContext } = useCrud(UserConfig);
+
+  return (
+    <div>
+      {loading ? <p>Loading...</p> : (
+        <>
+          {Array.from(items.values()).map((user) => (
+            <div key={user.id}>
+              <span>{user.name} - {user.email}</span>
+              <button onClick={() => update(user.id, (draft) => {
+                draft.name = "Updated Name";
+              })}>
+                Update
+              </button>
+              <button onClick={() => remove(user.id)}>Delete</button>
+            </div>
+          ))}
+          <button onClick={() => create({
+            id: `temp-${Date.now()}`,
+            name: "New User",
+            email: "new@example.com",
+          })}>
+            Add User
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
 ```
 
-### Cache Control
-
-Control caching behavior:
+### Server Setup
 
 ```typescript
-const config: Config<T, C> = {
-  // ...
-  cacheCapacity: 20,  // Store up to 20 cache entries
-  cacheTtl: 30000,    // Cache expires after 30 seconds
-};
+import { createSyncServer, serverSyncSuccess } from "use-abcd/runtime/server";
 
-const { refresh } = useCrud(config);
+// Define your handlers
+const usersHandler = createSyncServer<User, UserQuery>({
+  fetch: async (query) => {
+    // Handle pagination and search
+    return db.users.findMany({
+      skip: (query.page - 1) * query.limit,
+      take: query.limit,
+      where: query.search ? { name: { contains: query.search } } : undefined,
+    });
+  },
 
-// Force refresh (bypass cache)
-await refresh();
+  create: async (data) => {
+    const user = await db.users.create({ data });
+    return serverSyncSuccess({ newId: user.id });
+  },
+
+  update: async (id, data) => {
+    await db.users.update({ where: { id }, data });
+    return serverSyncSuccess();
+  },
+
+  delete: async (id) => {
+    await db.users.delete({ where: { id } });
+    return serverSyncSuccess();
+  },
+});
+
+// Use with your framework
+// Next.js App Router
+export const POST = usersHandler.handler;
+
+// Hono
+app.post("/api/users", (c) => usersHandler.handler(c.req.raw));
+
+// Bun.serve
+Bun.serve({
+  fetch(req) {
+    if (new URL(req.url).pathname === "/api/users") {
+      return usersHandler.handler(req);
+    }
+  }
+});
 ```
 
-## Running Examples Locally
+### What You Get
 
-The repository includes a development environment with MSW (Mock Service Worker) for testing:
+- **Type safety**: Full TypeScript inference from data types to API calls
+- **Automatic ID remapping**: Temporary IDs are replaced with server-assigned IDs
+- **Batch operations**: Multiple changes are sent in a single request
+- **Optimistic updates**: UI updates instantly, syncs in background
+- **Error handling**: Failed operations are tracked and can be retried
+- **Unified endpoint**: Single POST endpoint handles fetch + create/update/delete
 
-```bash
-# Clone the repository
-git clone https://github.com/smtrd3/use-abcd
-cd use-abcd
+### Request/Response Format
 
-# Install dependencies
-bun install  # or npm install
+```typescript
+// Fetch + Sync in one request
+POST /api/users
+Body: {
+  query: { page: 1, limit: 10, search: "john" },
+  changes: [
+    { id: "temp-123", type: "create", data: { ... } },
+    { id: "456", type: "update", data: { ... } },
+    { id: "789", type: "delete", data: { ... } }
+  ]
+}
 
-# Start development server
-bun run dev  # or npm run dev
+Response: {
+  results: [...users],  // Fetched items
+  syncResults: [        // Sync results
+    { id: "temp-123", status: "success", newId: "999" },
+    { id: "456", status: "success" },
+    { id: "789", status: "success" }
+  ]
+}
 ```
-
-Visit `http://localhost:5173` to see the examples in action.
-
-### Available Examples:
-
-1. **Products (Full CRUD)** - Complete CRUD operations with filtering
-2. **Pagination** - Context-based pagination with users
-3. **Optimistic Updates** - Comments with sync queue visualization
-4. **Blog Post (Original)** - Simple single-item editing
-5. **Todo (Original)** - Basic list operations
 
 ## API Reference
 
 ### Types
 
 ```typescript
-// Main configuration
-type Config<T, C> = {
+type Config<T extends object, C> = {
   id: string;
   initialContext: C;
   getId: (item: T) => string;
-  setId?: (item: T, newId: string) => T;  // Optional: for ID remapping on create
+  setId?: (item: T, newId: string) => T;
   syncDebounce?: number;
   syncRetries?: number;
   cacheCapacity?: number;
   cacheTtl?: number;
   onFetch: (context: C, signal: AbortSignal) => Promise<T[]>;
-  onSync: (changes: Change<T>[], signal: AbortSignal) => Promise<SyncResult[]>;
+  onSync?: (changes: Change<T>[], signal: AbortSignal) => Promise<SyncResult[]>;
 };
 
-// Change type for sync operations
 type Change<T> = {
   id: string;
   type: "create" | "update" | "delete";
   data: T;
 };
 
-// Sync result
 type SyncResult = {
   id: string;
   status: "success" | "error";
   error?: string;
-  newId?: string;  // For create operations: server-assigned ID to replace temp ID
+  newId?: string;  // For creates: server-assigned ID
 };
 
-// Item status
 type ItemStatus = {
   type: "create" | "update" | "delete";
   status: "pending" | "syncing" | "success" | "error";
   retries: number;
   error?: string;
 } | null;
-
-// Sync queue state
-type SyncQueueState<T> = {
-  queue: Map<string, Change<T>>;        // Pending changes
-  inFlight: Map<string, Change<T>>;     // Currently syncing
-  errors: Map<string, { error: string; retries: number }>;
-  isPaused: boolean;
-  isSyncing: boolean;
-};
 ```
 
 ## Best Practices
 
-1. **Use Optimistic Updates**: Let users see changes immediately while syncing in the background
-2. **Handle Errors Gracefully**: Show error states and provide retry mechanisms
-3. **Configure Debouncing**: Adjust `syncDebounce` based on your use case
-4. **Leverage Context**: Use context for filters, pagination, and search
-5. **Monitor Sync Queue**: Display pending changes and errors to users
-6. **Cache Wisely**: Configure `cacheTtl` and `cacheCapacity` based on your data freshness requirements
+1. **Use Optimistic Updates** - Let users see changes immediately while syncing in the background
+2. **Handle Errors Gracefully** - Show error states and provide retry mechanisms
+3. **Leverage Context** - Use context for filters, pagination, and search to trigger automatic refetches
+4. **Use getItem() + useItem()** - For individual item management with automatic React optimization
+5. **Monitor Sync Queue** - Display pending changes and errors to users for transparency
+6. **Use createSyncClient/Server** - For end-to-end type-safe CRUD with minimal boilerplate
 
 ## Architecture
 
 The library is built on several core concepts:
 
-- **Collection**: Manages the item collection, sync queue, and fetch handler
-- **SyncQueue**: Handles debounced synchronization with retry logic
-- **FetchHandler**: Manages data fetching with caching
-- **Item**: Represents individual items with their sync state
+- **Collection** - Manages the item collection, sync queue, and fetch handler
+- **SyncQueue** - Handles debounced synchronization with retry logic
+- **FetchHandler** - Manages data fetching with caching
+- **Item** - Represents individual items with WeakMap-based caching for React optimization
 
 All state updates use [Mutative](https://github.com/unadlib/mutative) for immutable updates, ensuring React can efficiently detect changes.
 
