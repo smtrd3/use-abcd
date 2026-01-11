@@ -16,7 +16,7 @@ export type {
   FetchState,
 } from "./types";
 
-export function useCrud<T, C>(config: Config<T, C>) {
+export function useCrud<T extends object, C>(config: Config<T, C>) {
   const collection = Collection.get(config);
 
   const state = useSyncExternalStore(

@@ -1,4 +1,4 @@
-import { useSyncExternalStore, useCallback, useEffect } from "react";
+import { useSyncExternalStore, useCallback } from "react";
 import type { Draft } from "mutative";
 import type { Item } from "./item";
 import type { ItemStatus } from "./types";
@@ -11,15 +11,9 @@ export type UseItemResult<T> = {
   exists: boolean;
 };
 
-export function useItem<T, C>(item: Item<T, C>): UseItemResult<T> {
-  // Release item reference on unmount
-  // Use queueMicrotask to defer release, allowing React StrictMode's
-  // rapid unmount→remount cycle to balance retain/release properly
-  useEffect(() => {
-    return () => {
-      queueMicrotask(() => item._release());
-    };
-  }, [item]);
+export function useItem<T extends object, C>(item: Item<T, C>): UseItemResult<T> {
+  // Note: Item cache is now managed by Collection.setContext()
+  // Cache is automatically cleared when context changes
 
   const data = useSyncExternalStore(
     (callback) => item.collection.subscribe(callback),

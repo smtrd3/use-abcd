@@ -25,18 +25,19 @@ export type CollectionState<T, C> = {
   fetchError?: string;
 };
 
-export class Collection<T, C> {
+export class Collection<T extends object, C> {
   // Global cache of collection instances by id
-  private static _cache = new Map<string, Collection<unknown, unknown>>();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private static _cache = new Map<string, Collection<any, any>>();
 
   // Get or create a collection instance
-  static get<T, C>(config: Config<T, C>): Collection<T, C> {
+  static get<T extends object, C>(config: Config<T, C>): Collection<T, C> {
     const existing = Collection._cache.get(config.id);
     if (existing) {
       return existing as Collection<T, C>;
     }
     const collection = new Collection(config);
-    Collection._cache.set(config.id, collection as Collection<unknown, unknown>);
+    Collection._cache.set(config.id, collection);
     return collection;
   }
 
@@ -56,7 +57,7 @@ export class Collection<T, C> {
   private _state: CollectionState<T, C>;
   private _syncQueue: SyncQueue<T>;
   private _fetchHandler: FetchHandler<T, C>;
-  private _itemCache: Map<string, Item<T, C>> = new Map();
+  private _itemCache: WeakMap<T & object, Item<T, C>> = new WeakMap();
   private _subscribers: Set<() => void> = new Set();
   private _hasInitialized = false;
   private _batchMode = false;
@@ -227,27 +228,29 @@ export class Collection<T, C> {
       draft.items.delete(id);
     });
 
-    this._itemCache.delete(id);
+    // WeakMap will automatically GC the Item when data object is no longer referenced
     this._fetchHandler.invalidateCache();
     this._notifySubscribers();
 
     this._syncQueue.enqueue({ id, type: "delete", data: item });
   }
 
-  // Get Item reference (cached) - automatically retains the item
+  // Get Item reference (cached by data object)
   getItem(id: string): Item<T, C> {
-    let item = this._itemCache.get(id);
+    const data = this._state.items.get(id);
+    if (!data) {
+      // Item doesn't exist, create a placeholder that will return undefined
+      return new Item(this, id);
+    }
+
+    // Use data object as WeakMap key
+    const dataAsObject = data as T & object;
+    let item = this._itemCache.get(dataAsObject);
     if (!item) {
       item = new Item(this, id);
-      this._itemCache.set(id, item);
+      this._itemCache.set(dataAsObject, item);
     }
-    item._retain();
     return item;
-  }
-
-  // Release item from cache when ref count reaches zero
-  _releaseItem(id: string): void {
-    this._itemCache.delete(id);
   }
 
   // Update context and refetch
@@ -295,7 +298,6 @@ export class Collection<T, C> {
   destroy(): void {
     this._syncQueue.destroy();
     this._fetchHandler.destroy();
-    this._itemCache.clear();
     this._subscribers.clear();
     Collection._cache.delete(this.id);
   }
@@ -407,15 +409,18 @@ export class Collection<T, C> {
       }
     });
 
-    // Update item cache references
-    for (const { tempId, newId } of mappings) {
-      const cachedItem = this._itemCache.get(tempId);
-      if (cachedItem) {
-        // Update the Item's internal ID
-        cachedItem._updateId(newId);
-        // Move to new key in cache
-        this._itemCache.delete(tempId);
-        this._itemCache.set(newId, cachedItem);
+    // Update cached Item instances with new IDs
+    // Since we use data objects as WeakMap keys, the WeakMap automatically
+    // maps the new data object created above to any cached Item instances
+    for (const { newId } of mappings) {
+      const data = this._state.items.get(newId);
+      if (data) {
+        const dataAsObject = data as T & object;
+        const cachedItem = this._itemCache.get(dataAsObject);
+        if (cachedItem) {
+          // Update the Item's internal ID to the new permanent ID
+          cachedItem._updateId(newId);
+        }
       }
     }
 

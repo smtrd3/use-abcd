@@ -66,7 +66,7 @@ export type SyncQueueState<T> = {
 export type FetchState = "idle" | "fetching" | "error";
 
 // Config
-export type Config<T, C> = {
+export type Config<T extends object, C> = {
   id: string;
   initialContext: C;
   getId: (item: T) => string;
