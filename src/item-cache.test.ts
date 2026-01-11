@@ -215,7 +215,10 @@ describe("Item Cache with WeakMap", () => {
       // Wait for initial fetch
       await new Promise((resolve) => setTimeout(resolve, 50));
 
-      const renderCalls: { item: ReturnType<typeof collection.getItem>; data: TestItem | undefined }[] = [];
+      const renderCalls: {
+        item: ReturnType<typeof collection.getItem>;
+        data: TestItem | undefined;
+      }[] = [];
 
       // Simulate multiple React renders
       for (let i = 0; i < 5; i++) {
@@ -236,7 +239,8 @@ describe("Item Cache with WeakMap", () => {
       // Wait for initial fetch
       await new Promise((resolve) => setTimeout(resolve, 50));
 
-      const renderCalls: { item: ReturnType<typeof collection.getItem>; valueAtTime: number }[] = [];
+      const renderCalls: { item: ReturnType<typeof collection.getItem>; valueAtTime: number }[] =
+        [];
 
       // First render
       const item1 = collection.getItem("1");

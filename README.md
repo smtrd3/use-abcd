@@ -2,7 +2,7 @@
 
 [![Build Status](https://github.com/smtrd3/common-state/workflows/CI/badge.svg)](https://github.com/smtrd3/common-state/actions)
 
-Most apps on the internet are some form of CRUD - whether it's a todo list, a dashboard, or a social media feed. Yet we often find ourselves fighting with complex state management frameworks, reinventing patterns for each project. What if we inverted the problem? Instead of building custom state management, recognize that your app state is likely CRUD at its core. This library provides highly optimized, systematic CRUD state management that makes your code easier to reason about and your life as a developer much simpler. You don't need to invent state management for each app - chances are, it's just CRUD.
+Most apps on the internet are some form of CRUD - whether it's a todo list, a dashboard, or a social media feed. Yet we often find ourselves fighting with complex state management frameworks, reinventing patterns for each project. What if we inverted the problem? Instead of building custom state management, recognize that your app state is likely CRUD at its core. This library provides highly optimized, systematic CRUD state management that makes your code easier to reason about and your life as a developer much simpler. You don't need to invent state management for each app - chances are, it's just CRUD. And with built-in sync and offline-first capabilities, you get zero-latency UI updates and virtually no loading screens - your API integration becomes a breeze while users enjoy an instant, responsive experience.
 
 A powerful React hook for managing ABCD (or CRUD) operations with optimistic updates, caching, and automatic state management.
 
