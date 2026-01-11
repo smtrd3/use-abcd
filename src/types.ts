@@ -84,6 +84,11 @@ export type Config<T extends object, C> = {
   // Fetch configuration
   fetchRetries?: number; // default 0
 
+  // Tree configuration
+  rootId?: string; // If set, collection is a tree
+  getNodeId?: () => string; // Custom node ID generator (default: lodash uniqueId)
+  nodeSeparator?: string; // Separator for node IDs (default: ".")
+
   // Handlers
   onFetch: (context: C, signal: AbortSignal) => Promise<T[]>;
   onSync?: (changes: Change<T>[], signal: AbortSignal) => Promise<SyncResult[]>;

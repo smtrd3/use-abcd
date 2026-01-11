@@ -1,7 +1,9 @@
 import { create, type Draft } from "mutative";
+import { last, get } from "lodash-es";
 import { SyncQueue } from "./sync-queue";
 import { FetchHandler } from "./fetch-handler";
 import { Item } from "./item";
+import { Node, type TreeNode } from "./node";
 import type {
   Config,
   SyncState,
@@ -51,6 +53,11 @@ export class Collection<T extends object, C> {
     Collection._cache.clear();
   }
 
+  // Get existing collection by ID (returns undefined if not found)
+  static getById<T extends object, C>(id: string): Collection<T, C> | undefined {
+    return Collection._cache.get(id) as Collection<T, C> | undefined;
+  }
+
   readonly id: string;
   readonly config: Config<T, C>;
 
@@ -58,6 +65,9 @@ export class Collection<T extends object, C> {
   private _syncQueue: SyncQueue<T>;
   private _fetchHandler: FetchHandler<T, C>;
   private _itemCache: WeakMap<T & object, Item<T, C>> = new WeakMap();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private _nodeCache: WeakMap<TreeNode<any, any> & object, Node<any, C, any>> = new WeakMap();
+  private _selectedNodeId: string | null = null;
   private _subscribers: Set<() => void> = new Set();
   private _hasInitialized = false;
   private _batchMode = false;
@@ -154,26 +164,26 @@ export class Collection<T extends object, C> {
     const { queue, inFlight, errors } = this._state.syncQueue;
 
     const inFlightChanges = inFlight.get(id);
-    if (inFlightChanges && inFlightChanges.length > 0) {
+    const lastInFlight = last(inFlightChanges);
+    if (lastInFlight) {
       // Use the last operation as the most relevant status
-      const lastChange = inFlightChanges[inFlightChanges.length - 1];
       return {
-        type: lastChange.type,
+        type: lastInFlight.type,
         status: "syncing",
-        retries: errors.get(id)?.retries ?? 0,
+        retries: get(errors.get(id), "retries", 0),
       };
     }
 
     const queuedChanges = queue.get(id);
-    if (queuedChanges && queuedChanges.length > 0) {
+    const lastQueued = last(queuedChanges);
+    if (lastQueued) {
       // Use the last operation as the most relevant status
-      const lastChange = queuedChanges[queuedChanges.length - 1];
       const errorInfo = errors.get(id);
       return {
-        type: lastChange.type,
+        type: lastQueued.type,
         status: errorInfo ? "error" : "pending",
-        retries: errorInfo?.retries ?? 0,
-        error: errorInfo?.error,
+        retries: get(errorInfo, "retries", 0),
+        error: get(errorInfo, "error"),
       };
     }
 
@@ -251,6 +261,57 @@ export class Collection<T extends object, C> {
       this._itemCache.set(dataAsObject, item);
     }
     return item;
+  }
+
+  // Get Node reference (cached by data object) - for tree collections
+  getNode<V extends object, NodeType = string>(id: string): Node<V, C, NodeType> {
+    const data = this._state.items.get(id) as TreeNode<V, NodeType> | undefined;
+    if (!data) {
+      return new Node(this as unknown as Collection<TreeNode<V, NodeType>, C>, id);
+    }
+
+    const dataAsObject = data as TreeNode<V, NodeType> & object;
+    let node = this._nodeCache.get(dataAsObject) as Node<V, C, NodeType> | undefined;
+    if (!node) {
+      node = new Node(this as unknown as Collection<TreeNode<V, NodeType>, C>, id);
+      this._nodeCache.set(dataAsObject, node);
+    }
+    return node;
+  }
+
+  // Execute multiple operations with single notification at the end
+  batch(fn: () => void): void {
+    this._batchMode = true;
+    try {
+      fn();
+    } finally {
+      this._batchMode = false;
+      this._notifySubscribers();
+    }
+  }
+
+  // Selection methods for tree nodes
+  selectNode(id: string): void {
+    if (this._selectedNodeId !== id) {
+      this._selectedNodeId = id;
+      this._notifySubscribers();
+    }
+  }
+
+  deselectNode(): void {
+    if (this._selectedNodeId !== null) {
+      this._selectedNodeId = null;
+      this._notifySubscribers();
+    }
+  }
+
+  get selectedNodeId(): string | null {
+    return this._selectedNodeId;
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  get selectedNode(): Node<any, C> | null {
+    return this._selectedNodeId ? this.getNode(this._selectedNodeId) : null;
   }
 
   // Update context and refetch
@@ -336,15 +397,15 @@ export class Collection<T extends object, C> {
       // Preserve local pending changes (creates/updates not yet synced)
       for (const [id, changes] of queue) {
         // Use the last change's data as the most up-to-date local state
-        const lastChange = changes[changes.length - 1];
-        if (lastChange.type === "create" || lastChange.type === "update") {
+        const lastChange = last(changes);
+        if (lastChange && (lastChange.type === "create" || lastChange.type === "update")) {
           newItems.set(id, lastChange.data as Draft<T>);
         }
       }
       for (const [id, changes] of inFlight) {
         // Use the last change's data as the most up-to-date local state
-        const lastChange = changes[changes.length - 1];
-        if (lastChange.type === "create" || lastChange.type === "update") {
+        const lastChange = last(changes);
+        if (lastChange && (lastChange.type === "create" || lastChange.type === "update")) {
           newItems.set(id, lastChange.data as Draft<T>);
         }
       }

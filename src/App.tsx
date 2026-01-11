@@ -1,8 +1,9 @@
+import "./index.css";
 import { useCallback } from "react";
 import { Products } from "./examples/Products";
 import { PaginatedUsers } from "./examples/PaginatedUsers";
 import { OptimisticComments } from "./examples/OptimisticComments";
-import "./index.css";
+import { TreeEditor } from "./examples/TreeEditor";
 import { Switch, Route, Link } from "wouter";
 
 function App() {
@@ -25,6 +26,9 @@ function App() {
             <Link className={active} to="/optimistic">
               <span className="text-blue-600 hover:text-blue-800">Optimistic Updates</span>
             </Link>
+            <Link className={active} to="/tree">
+              <span className="text-blue-600 hover:text-blue-800">Tree Editor</span>
+            </Link>
           </div>
         </div>
       </nav>
@@ -33,6 +37,7 @@ function App() {
           <Route path="/" component={Products} />
           <Route path="/pagination" component={PaginatedUsers} />
           <Route path="/optimistic" component={OptimisticComments} />
+          <Route path="/tree" component={TreeEditor} />
         </Switch>
       </div>
     </div>
