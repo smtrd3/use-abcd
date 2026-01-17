@@ -2,7 +2,7 @@
 
 [![Build Status](https://github.com/smtrd3/common-state/workflows/CI/badge.svg)](https://github.com/smtrd3/common-state/actions)
 
-Most apps on the internet are some form of CRUD - whether it's a todo list, a dashboard, or a social media feed. Yet we often find ourselves fighting with complex state management frameworks, reinventing patterns for each project. What if we inverted the problem? Instead of building custom state management, recognize that your app state is likely CRUD at its core. This library provides highly optimized, systematic CRUD state management that makes your code easier to reason about and your life as a developer much simpler. You don't need to invent state management for each app - chances are, it's just CRUD. And with built-in sync and offline-first capabilities, you get zero-latency UI updates and virtually no loading screens - your API integration becomes a breeze while users enjoy an instant, responsive experience.
+Most apps are just CRUD operations in disguise. Stop fighting complex state management frameworks and reinventing patterns. This library gives you optimized CRUD state management with built-in sync and offline-first support. Get zero-latency updates, no loading screens, and effortless API integration. Your code stays simple, your users get instant responses.
 
 A powerful React hook for managing ABCD (or CRUD) operations with optimistic updates, caching, and automatic state management.
 
@@ -92,18 +92,18 @@ The `Config` object defines how your data is fetched, synced, and managed:
 
 ```typescript
 type Config<T extends object, C> = {
-  id: string;                    // Unique identifier for this collection
-  initialContext: C;             // Initial context (filters, pagination, etc.)
-  getId: (item: T) => string;    // Extract ID from item
-  setId?: (item: T, newId: string) => T;  // Optional: for ID remapping on create
+  id: string; // Unique identifier for this collection
+  initialContext: C; // Initial context (filters, pagination, etc.)
+  getId: (item: T) => string; // Extract ID from item
+  setId?: (item: T, newId: string) => T; // Optional: for ID remapping on create
 
   // Optional sync configuration
-  syncDebounce?: number;         // Debounce delay for sync (default: 300ms)
-  syncRetries?: number;          // Max retry attempts (default: 3)
+  syncDebounce?: number; // Debounce delay for sync (default: 300ms)
+  syncRetries?: number; // Max retry attempts (default: 3)
 
   // Optional cache configuration
-  cacheCapacity?: number;        // Max cache entries (default: 10)
-  cacheTtl?: number;            // Cache TTL in ms (default: 60000)
+  cacheCapacity?: number; // Max cache entries (default: 10)
+  cacheTtl?: number; // Cache TTL in ms (default: 60000)
 
   // Required handlers
   onFetch: (context: C, signal: AbortSignal) => Promise<T[]>;
@@ -194,6 +194,7 @@ function ProductItem({ item }: { item: Item<Product, ProductContext> }) {
 ```
 
 **Benefits:**
+
 - `useItem()` subscribes only to that specific item's changes
 - React re-renders only when that item's data changes (automatic optimization via WeakMap cache)
 - Clean separation of list and item concerns
@@ -257,9 +258,9 @@ onSync: async (changes, signal) => {
 
       // Return newId to remap temp ID to server ID
       return {
-        id: change.id,        // Temporary ID (e.g., "temp-123")
+        id: change.id, // Temporary ID (e.g., "temp-123")
         status: "success",
-        newId: data.id,       // Server-assigned ID (e.g., "456")
+        newId: data.id, // Server-assigned ID (e.g., "456")
       };
     }
     // ... handle update and delete
@@ -268,6 +269,7 @@ onSync: async (changes, signal) => {
 ```
 
 The library automatically:
+
 1. Updates the item's key in the `items` Map
 2. Updates the item's `id` property
 3. Updates any `Item` references
@@ -380,7 +382,7 @@ Bun.serve({
     if (new URL(req.url).pathname === "/api/users") {
       return usersHandler.handler(req);
     }
-  }
+  },
 });
 ```
 
@@ -445,7 +447,7 @@ type SyncResult = {
   id: string;
   status: "success" | "error";
   error?: string;
-  newId?: string;  // For creates: server-assigned ID
+  newId?: string; // For creates: server-assigned ID
 };
 
 type ItemStatus = {

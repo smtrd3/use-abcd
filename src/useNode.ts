@@ -46,6 +46,14 @@ type NodeSnapshot<T extends object, C, NodeType> = {
   children: Node<T, C, NodeType>[];
 };
 
+const DEFAULT_NODE_VALUE = {
+  data: undefined,
+  status: null,
+  exists: false,
+  isSelected: false,
+  children: [],
+};
+
 export function useNode<T extends object, C, NodeType = string>(
   node: Node<T, C, NodeType>,
 ): UseNodeResult<T, C, NodeType> {
@@ -55,43 +63,26 @@ export function useNode<T extends object, C, NodeType = string>(
   const snapshot = useSyncExternalStore(
     (cb) => node.collection.subscribe(cb),
     () => {
-      const data = node.data;
-      const status = node.getStatus();
-      const exists = node.exists();
-      const isSelected = isEqual(node.collection.selectedNodeId, node.id);
       const nextChildren = node.getChildren();
-
       const prev = snapshotRef.current;
-      // Only create new snapshot if something changed
-      if (
-        prev &&
-        isEqual(prev.data, data) &&
-        isEqual(prev.status, status) &&
-        isEqual(prev.exists, exists) &&
-        isEqual(prev.isSelected, isSelected) &&
-        !childrenChanged(prev.children, nextChildren)
-      ) {
-        return prev;
+
+      const children =
+        prev && !childrenChanged(prev.children, nextChildren) ? prev.children : nextChildren;
+      const nextSnapshot: NodeSnapshot<T, C, NodeType> = {
+        data: node.data,
+        status: node.getStatus(),
+        exists: node.exists(),
+        isSelected: isEqual(node.collection.selectedNodeId, node.id),
+        children,
+      };
+
+      if (!isEqual(prev, nextSnapshot)) {
+        snapshotRef.current = nextSnapshot;
       }
 
-      snapshotRef.current = {
-        data,
-        status,
-        exists,
-        isSelected,
-        children:
-          prev && !childrenChanged(prev.children, nextChildren) ? prev.children : nextChildren,
-      };
-      return snapshotRef.current;
+      return snapshotRef.current!;
     },
-    () =>
-      snapshotRef.current ?? {
-        data: undefined,
-        status: null,
-        exists: false,
-        isSelected: false,
-        children: [],
-      },
+    () => snapshotRef.current ?? DEFAULT_NODE_VALUE,
   );
 
   const getParent = useCallback(() => node.getParent(), [node]);

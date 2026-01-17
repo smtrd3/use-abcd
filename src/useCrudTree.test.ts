@@ -28,6 +28,58 @@ describe("useCrudTree", () => {
     Collection.clear("test-crud-tree");
   });
 
+  describe("snapshot stability", () => {
+    it("does not cause infinite loop - snapshot reference is stable when no changes occur", async () => {
+      const { result, rerender } = renderHook(() => useCrudTree(config));
+
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      });
+
+      const firstRootNode = result.current.rootNode;
+      const firstContext = result.current.context;
+
+      rerender();
+
+      // Key assertion: same reference means no infinite loop
+      // If useSyncExternalStore's getSnapshot returns a new object each time,
+      // React will detect the change and re-render infinitely
+      expect(result.current.rootNode).toBe(firstRootNode);
+      expect(result.current.context).toBe(firstContext);
+    });
+
+    it("snapshot reference is stable after data changes settle", async () => {
+      const { result, rerender } = renderHook(() => useCrudTree(config));
+
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      });
+
+      // Create a root node
+      act(() => {
+        const collection = Collection.get(config);
+        collection.create({
+          id: "root",
+          position: 0,
+          value: { name: "Root" },
+          type: "object",
+        });
+      });
+
+      const rootNodeAfterCreate = result.current.rootNode;
+
+      // Multiple rerenders should return the same reference
+      rerender();
+      expect(result.current.rootNode).toBe(rootNodeAfterCreate);
+
+      rerender();
+      expect(result.current.rootNode).toBe(rootNodeAfterCreate);
+
+      rerender();
+      expect(result.current.rootNode).toBe(rootNodeAfterCreate);
+    });
+  });
+
   describe("toJson", () => {
     it("returns null when root node does not exist", async () => {
       const { result } = renderHook(() => useCrudTree(config));
