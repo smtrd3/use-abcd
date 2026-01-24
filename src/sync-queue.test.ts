@@ -46,7 +46,7 @@ describe("SyncQueue", () => {
       // Advance timers to trigger flush
       vi.advanceTimersByTime(300);
       await vi.waitFor(() => {
-        expect(mockOnSync).toHaveBeenCalledWith([change], expect.any(AbortSignal));
+        expect(mockOnSync).toHaveBeenCalledWith([change], undefined, expect.any(AbortSignal));
       });
     });
 
@@ -553,6 +553,7 @@ describe("SyncQueue", () => {
       expect(mockOnSync).toHaveBeenCalledTimes(1);
       expect(mockOnSync).toHaveBeenCalledWith(
         [{ id: "1", type: "create", data: { id: "1", value: "v3" } }],
+        undefined,
         expect.any(AbortSignal),
       );
     });

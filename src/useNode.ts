@@ -58,7 +58,7 @@ export function useNode<T extends object, C, NodeType = string>(
   node: Node<T, C, NodeType>,
 ): UseNodeResult<T, C, NodeType> {
   // Cache for reference stability
-  const snapshotRef = useRef<NodeSnapshot<T, C, NodeType> | null>(null);
+  const snapshotRef = useRef<NodeSnapshot<T, C, NodeType>>(DEFAULT_NODE_VALUE);
 
   const snapshot = useSyncExternalStore(
     (cb) => node.collection.subscribe(cb),
@@ -66,8 +66,7 @@ export function useNode<T extends object, C, NodeType = string>(
       const nextChildren = node.getChildren();
       const prev = snapshotRef.current;
 
-      const children =
-        prev && !childrenChanged(prev.children, nextChildren) ? prev.children : nextChildren;
+      const children = !childrenChanged(prev.children, nextChildren) ? prev.children : nextChildren;
       const nextSnapshot: NodeSnapshot<T, C, NodeType> = {
         data: node.data,
         status: node.getStatus(),
@@ -80,9 +79,9 @@ export function useNode<T extends object, C, NodeType = string>(
         snapshotRef.current = nextSnapshot;
       }
 
-      return snapshotRef.current!;
+      return snapshotRef.current;
     },
-    () => snapshotRef.current ?? DEFAULT_NODE_VALUE,
+    () => snapshotRef.current,
   );
 
   const getParent = useCallback(() => node.getParent(), [node]);

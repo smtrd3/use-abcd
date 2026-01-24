@@ -56,7 +56,7 @@ const ProductsConfig: Config<Product, ProductContext> = {
   },
 
   // Sync changes (batch operation)
-  onSync: async (changes, signal) => {
+  onSync: async (changes, _context, signal) => {
     const results: SyncResult[] = [];
 
     for (const change of changes) {

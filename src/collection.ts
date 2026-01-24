@@ -62,7 +62,7 @@ export class Collection<T extends object, C> {
   readonly config: Config<T, C>;
 
   private _state: CollectionState<T, C>;
-  private _syncQueue: SyncQueue<T>;
+  private _syncQueue: SyncQueue<T, C>;
   private _fetchHandler: FetchHandler<T, C>;
   private _itemCache: WeakMap<T & object, Item<T, C>> = new WeakMap();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -81,9 +81,10 @@ export class Collection<T extends object, C> {
     const defaultOnSync = async (changes: Change<T>[]): Promise<SyncResult[]> =>
       changes.map((c) => ({ id: c.id, status: "success" as const }));
 
-    this._syncQueue = new SyncQueue<T>({
+    this._syncQueue = new SyncQueue<T, C>({
       debounce: config.syncDebounce ?? 300,
       maxRetries: config.syncRetries ?? 3,
+      getContext: () => this._state.context,
       onSync: config.onSync ?? defaultOnSync,
       onIdRemap: (mappings) => this._handleIdRemap(mappings),
     });

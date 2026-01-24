@@ -32,8 +32,8 @@ export type SyncBuilderConfig<T> = {
   delete?: DeleteHandler<T>;
 };
 
-export type SyncBuilder<T> = {
-  onSync: (changes: Change<T>[], signal: AbortSignal) => Promise<SyncResult[]>;
+export type SyncBuilder<T, C = unknown> = {
+  onSync: (changes: Change<T>[], context: C, signal: AbortSignal) => Promise<SyncResult[]>;
   handlers: {
     create?: CreateHandler<T>;
     update?: UpdateHandler<T>;
@@ -129,8 +129,12 @@ async function processChange<T>(
 // Public API
 // ============================================================================
 
-export function createSyncClient<T>(config: SyncBuilderConfig<T>): SyncBuilder<T> {
-  const onSync = async (changes: Change<T>[], signal: AbortSignal): Promise<SyncResult[]> => {
+export function createSyncClient<T, C = unknown>(config: SyncBuilderConfig<T>): SyncBuilder<T, C> {
+  const onSync = async (
+    changes: Change<T>[],
+    _context: C,
+    signal: AbortSignal,
+  ): Promise<SyncResult[]> => {
     return Promise.all(changes.map((change) => processChange(change, config, signal)));
   };
 
@@ -140,18 +144,25 @@ export function createSyncClient<T>(config: SyncBuilderConfig<T>): SyncBuilder<T
   };
 }
 
-export function createSyncClientWithStats<T>(config: SyncBuilderConfig<T>): {
-  onSync: (changes: Change<T>[], signal: AbortSignal) => Promise<SyncResult[]>;
-  onSyncWithStats: (changes: Change<T>[], signal: AbortSignal) => Promise<SyncBatchResult>;
+export function createSyncClientWithStats<T, C = unknown>(
+  config: SyncBuilderConfig<T>,
+): {
+  onSync: (changes: Change<T>[], context: C, signal: AbortSignal) => Promise<SyncResult[]>;
+  onSyncWithStats: (
+    changes: Change<T>[],
+    context: C,
+    signal: AbortSignal,
+  ) => Promise<SyncBatchResult>;
   handlers: { create?: CreateHandler<T>; update?: UpdateHandler<T>; delete?: DeleteHandler<T> };
 } {
-  const { onSync, handlers } = createSyncClient(config);
+  const { onSync, handlers } = createSyncClient<T, C>(config);
 
   const onSyncWithStats = async (
     changes: Change<T>[],
+    context: C,
     signal: AbortSignal,
   ): Promise<SyncBatchResult> => {
-    const results = await onSync(changes, signal);
+    const results = await onSync(changes, context, signal);
     return categorizeResults(results);
   };
 
@@ -174,7 +185,7 @@ export type EndpointSyncClientConfig = {
 
 export type EndpointSyncClient<T, Q = unknown> = {
   onFetch: (query: Q, signal: AbortSignal) => Promise<T[]>;
-  onSync: (changes: Change<T>[], signal: AbortSignal) => Promise<SyncResult[]>;
+  onSync: (changes: Change<T>[], context: Q, signal: AbortSignal) => Promise<SyncResult[]>;
 };
 
 export function createSyncClientFromEndpoint<T, Q = unknown>(
@@ -219,7 +230,11 @@ export function createSyncClientFromEndpoint<T, Q = unknown>(
     }
   };
 
-  const onSync = async (changes: Change<T>[], signal: AbortSignal): Promise<SyncResult[]> => {
+  const onSync = async (
+    changes: Change<T>[],
+    _context: Q,
+    signal: AbortSignal,
+  ): Promise<SyncResult[]> => {
     if (signal.aborted) {
       return changes.map((c) => ({
         id: c.id,

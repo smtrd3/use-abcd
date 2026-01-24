@@ -79,6 +79,7 @@ describe("Client Sync Utilities", () => {
 
         const results = await onSync(
           [{ id: "temp-1", type: "create", data: { id: "temp-1", name: "New Item" } }],
+          undefined,
           signal,
         );
 
@@ -92,6 +93,7 @@ describe("Client Sync Utilities", () => {
 
         const results = await onSync(
           [{ id: "1", type: "update", data: { id: "1", name: "Updated" } }],
+          undefined,
           signal,
         );
 
@@ -105,6 +107,7 @@ describe("Client Sync Utilities", () => {
 
         const results = await onSync(
           [{ id: "1", type: "delete", data: { id: "1", name: "To Delete" } }],
+          undefined,
           signal,
         );
 
@@ -122,6 +125,7 @@ describe("Client Sync Utilities", () => {
             { id: "2", type: "update", data: { id: "2", name: "Updated" } },
             { id: "3", type: "delete", data: { id: "3", name: "Deleted" } },
           ],
+          undefined,
           signal,
         );
 
@@ -136,6 +140,7 @@ describe("Client Sync Utilities", () => {
 
         const results = await onSync(
           [{ id: "temp-1", type: "create", data: { id: "temp-1", name: "New" } }],
+          undefined,
           signal,
         );
 
@@ -154,6 +159,7 @@ describe("Client Sync Utilities", () => {
             { id: "2", type: "update", data: { id: "2", name: "Updated" } }, // Has handler
             { id: "3", type: "delete", data: { id: "3", name: "Deleted" } }, // No handler - success
           ],
+          undefined,
           signal,
         );
 
@@ -173,6 +179,7 @@ describe("Client Sync Utilities", () => {
 
         const results = await onSync(
           [{ id: "temp-1", type: "create", data: { id: "temp-1", name: "Item" } }],
+          undefined,
           signal,
         );
 
@@ -187,6 +194,7 @@ describe("Client Sync Utilities", () => {
 
         const results = await onSync(
           [{ id: "temp-1", type: "create", data: { id: "temp-1", name: "Item" } }],
+          undefined,
           signal,
         );
 
@@ -200,6 +208,7 @@ describe("Client Sync Utilities", () => {
 
         await onSync(
           [{ id: "1", type: "create", data: { id: "1", name: "Item" } }],
+          undefined,
           controller.signal,
         );
 
@@ -215,6 +224,7 @@ describe("Client Sync Utilities", () => {
 
         const results = await onSync(
           [{ id: "1", type: "update", data: { id: "1", name: "Updated" } }],
+          undefined,
           signal,
         );
 
@@ -230,6 +240,7 @@ describe("Client Sync Utilities", () => {
 
         const results = await onSync(
           [{ id: "1", type: "update", data: { id: "1", name: "Updated" } }],
+          undefined,
           signal,
         );
 
@@ -245,6 +256,7 @@ describe("Client Sync Utilities", () => {
 
         const results = await onSync(
           [{ id: "1", type: "delete", data: { id: "1", name: "Item" } }],
+          undefined,
           signal,
         );
 
@@ -260,6 +272,7 @@ describe("Client Sync Utilities", () => {
 
         const results = await onSync(
           [{ id: "1", type: "delete", data: { id: "1", name: "Item" } }],
+          undefined,
           signal,
         );
 
@@ -285,6 +298,7 @@ describe("Client Sync Utilities", () => {
             { id: "2", type: "create", data: { id: "2", name: "Item 2" } },
             { id: "3", type: "create", data: { id: "3", name: "Item 3" } },
           ],
+          undefined,
           signal,
         );
 
@@ -306,6 +320,7 @@ describe("Client Sync Utilities", () => {
             { id: "1", type: "update", data: { id: "1", name: "Updated" } },
             { id: "2", type: "delete", data: { id: "2", name: "Deleted" } },
           ],
+          undefined,
           signal,
         );
 
@@ -326,6 +341,7 @@ describe("Client Sync Utilities", () => {
             { id: "2", type: "create", data: { id: "2", name: "fail" } },
             { id: "3", type: "create", data: { id: "3", name: "success" } },
           ],
+          undefined,
           signal,
         );
 
@@ -346,6 +362,7 @@ describe("Client Sync Utilities", () => {
               data: { id: "1", name: "Item" },
             },
           ],
+          undefined,
           signal,
         );
 
@@ -367,6 +384,7 @@ describe("Client Sync Utilities", () => {
 
         const results = await onSync(
           [{ id: "1", type: "create", data: { id: "1", name: "Item" } }],
+          undefined,
           controller.signal,
         );
 
@@ -385,6 +403,7 @@ describe("Client Sync Utilities", () => {
 
         const results = await onSync(
           [{ id: "1", type: "create", data: { id: "1", name: "Item" } }],
+          undefined,
           signal,
         );
 
@@ -401,6 +420,7 @@ describe("Client Sync Utilities", () => {
 
         const results = await onSync(
           [{ id: "1", type: "create", data: { id: "1", name: "Item" } }],
+          undefined,
           signal,
         );
 
@@ -436,6 +456,7 @@ describe("Client Sync Utilities", () => {
 
       const results = await onSync(
         [{ id: "1", type: "create", data: { id: "1", name: "Item" } }],
+        undefined,
         signal,
       );
 
@@ -454,6 +475,7 @@ describe("Client Sync Utilities", () => {
           { id: "1", type: "create", data: { id: "1", name: "success" } },
           { id: "2", type: "create", data: { id: "2", name: "fail" } },
         ],
+        undefined,
         signal,
       );
 
@@ -609,6 +631,7 @@ describe("Client Sync Utilities", () => {
           { id: "1", type: "create", data: { id: "1", name: "New" } },
           { id: "2", type: "update", data: { id: "2", name: "Updated" } },
         ],
+        undefined,
         signal,
       );
 
@@ -632,7 +655,7 @@ describe("Client Sync Utilities", () => {
       );
 
       const { onSync } = createSyncClientFromEndpoint<TestItem>("/api/items/sync");
-      await onSync([], new AbortController().signal);
+      await onSync([], undefined, new AbortController().signal);
 
       expect(mockFetch).toHaveBeenCalledWith("/api/items/sync", expect.any(Object));
     });
@@ -646,7 +669,7 @@ describe("Client Sync Utilities", () => {
         endpoint: "/api/sync",
         headers: { Authorization: "Bearer token123" },
       });
-      await onSync([], new AbortController().signal);
+      await onSync([], undefined, new AbortController().signal);
 
       expect(mockFetch).toHaveBeenCalledWith("/api/sync", {
         method: "POST",
@@ -669,6 +692,7 @@ describe("Client Sync Utilities", () => {
           { id: "1", type: "create", data: { id: "1", name: "New" } },
           { id: "2", type: "update", data: { id: "2", name: "Updated" } },
         ],
+        undefined,
         signal,
       );
 
@@ -684,6 +708,7 @@ describe("Client Sync Utilities", () => {
       const { onSync } = createSyncClientFromEndpoint<TestItem>("/api/sync");
       const results = await onSync(
         [{ id: "1", type: "create", data: { id: "1", name: "New" } }],
+        undefined,
         new AbortController().signal,
       );
 
@@ -696,6 +721,7 @@ describe("Client Sync Utilities", () => {
       const { onSync } = createSyncClientFromEndpoint<TestItem>("/api/sync");
       const results = await onSync(
         [{ id: "1", type: "create", data: { id: "1", name: "New" } }],
+        undefined,
         new AbortController().signal,
       );
 
@@ -709,6 +735,7 @@ describe("Client Sync Utilities", () => {
 
       const results = await onSync(
         [{ id: "1", type: "create", data: { id: "1", name: "New" } }],
+        undefined,
         controller.signal,
       );
 
@@ -722,6 +749,7 @@ describe("Client Sync Utilities", () => {
       const { onSync } = createSyncClientFromEndpoint<TestItem>("/api/sync");
       const results = await onSync(
         [{ id: "1", type: "create", data: { id: "1", name: "New" } }],
+        undefined,
         new AbortController().signal,
       );
 
@@ -736,6 +764,7 @@ describe("Client Sync Utilities", () => {
       const { onSync } = createSyncClientFromEndpoint<TestItem>("/api/sync");
       const results = await onSync(
         [{ id: "1", type: "create", data: { id: "1", name: "New" } }],
+        undefined,
         new AbortController().signal,
       );
 
@@ -748,6 +777,7 @@ describe("Client Sync Utilities", () => {
       const { onSync } = createSyncClientFromEndpoint<TestItem>("/api/sync");
       const results = await onSync(
         [{ id: "1", type: "create", data: { id: "1", name: "New" } }],
+        undefined,
         new AbortController().signal,
       );
 

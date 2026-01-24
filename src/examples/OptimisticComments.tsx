@@ -37,7 +37,7 @@ const CommentsConfig: Config<Comment, CommentContext> = {
     return data.items;
   },
 
-  onSync: async (changes, signal) => {
+  onSync: async (changes, _context, signal) => {
     const results: SyncResult[] = [];
 
     for (const change of changes) {

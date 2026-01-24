@@ -16,7 +16,7 @@ import {
 } from "lodash-es";
 import type { Change, SyncQueueState, SyncResult, IdMapping } from "./types";
 
-export type SyncQueueConfig<T> = {
+export type SyncQueueConfig<T, C = unknown> = {
   debounce: number;
   maxRetries: number;
   /**
@@ -25,7 +25,12 @@ export type SyncQueueConfig<T> = {
    * Default: Infinity (send all queued changes)
    */
   batchSize?: number;
-  onSync: (changes: Change<T>[], signal: AbortSignal) => Promise<SyncResult[]>;
+  /**
+   * Getter function to retrieve the current context from the collection.
+   * Called at sync time to provide up-to-date context to onSync.
+   */
+  getContext?: () => C;
+  onSync: (changes: Change<T>[], context: C, signal: AbortSignal) => Promise<SyncResult[]>;
   onIdRemap?: (mappings: IdMapping[]) => void;
 };
 
@@ -69,14 +74,14 @@ const coalesce = <T>(ops: Change<T>[], next: Change<T>): Change<T>[] | null => {
   return [next];
 };
 
-export class SyncQueue<T> {
-  private _config: SyncQueueConfig<T>;
+export class SyncQueue<T, C = unknown> {
+  private _config: SyncQueueConfig<T, C>;
   private _state: SyncQueueState<T>;
   private _subscribers = new Set<() => void>();
   private _debounceTimer: ReturnType<typeof setTimeout> | null = null;
   private _abortController: AbortController | null = null;
 
-  constructor(config: SyncQueueConfig<T>) {
+  constructor(config: SyncQueueConfig<T, C>) {
     this._config = config;
     this._state = {
       queue: new Map(),
@@ -227,10 +232,11 @@ export class SyncQueue<T> {
 
     // Flatten all operations from selected items into a single array for the API call
     const changes = flatMap([...this._state.inFlight.values()]);
+    const context = this._config.getContext?.() as C;
     this._abortController = new AbortController();
 
     try {
-      const results = await this._config.onSync(changes, this._abortController.signal);
+      const results = await this._config.onSync(changes, context, this._abortController.signal);
       // Convert results array to a map for O(1) lookup by ID
       this._processResults(fromPairs(map(results, (r) => [r.id, r])));
     } catch (error) {

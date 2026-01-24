@@ -54,7 +54,5 @@ export function useSelectedNode<T extends object, C, NodeType = string>(
   const nodeResult = useNode(selectedNode ?? dummyNode);
 
   // Return empty result when no node is selected, otherwise return the useNode result
-  return selectedNode
-    ? nodeResult
-    : (EMPTY_RESULT as unknown as UseNodeResult<T, C, NodeType>);
+  return selectedNode ? nodeResult : (EMPTY_RESULT as unknown as UseNodeResult<T, C, NodeType>);
 }
