@@ -19,18 +19,13 @@ import type { Change, SyncQueueState, SyncResult, IdMapping } from "./types";
 export type SyncQueueConfig<T, C = unknown> = {
   debounce: number;
   maxRetries: number;
-  /**
-   * Maximum number of changes to send per sync call.
-   * Useful for rate limiting or API constraints.
-   * Default: Infinity (send all queued changes)
-   */
   batchSize?: number;
-  /**
-   * Getter function to retrieve the current context from the collection.
-   * Called at sync time to provide up-to-date context to onSync.
-   */
   getContext?: () => C;
-  onSync: (changes: Change<T>[], context: C, signal: AbortSignal) => Promise<SyncResult[]>;
+  onSync: (params: {
+    changes: Change<T>[];
+    context: C;
+    signal: AbortSignal;
+  }) => Promise<{ syncResults: SyncResult[] }>;
   onIdRemap?: (mappings: IdMapping[]) => void;
 };
 
@@ -104,6 +99,7 @@ export class SyncQueue<T, C = unknown> {
       }
       draft.errors.delete(change.id);
     });
+
     this._scheduleFlush();
   }
 
@@ -236,9 +232,13 @@ export class SyncQueue<T, C = unknown> {
     this._abortController = new AbortController();
 
     try {
-      const results = await this._config.onSync(changes, context, this._abortController.signal);
+      const { syncResults } = await this._config.onSync({
+        changes,
+        context,
+        signal: this._abortController.signal,
+      });
       // Convert results array to a map for O(1) lookup by ID
-      this._processResults(fromPairs(map(results, (r) => [r.id, r])));
+      this._processResults(fromPairs(map(syncResults, (r) => [r.id, r])));
     } catch (error) {
       this._handleError(error);
     }

@@ -1,11 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import { describe, it, expect, vi } from "vitest";
-import {
-  createSyncServer,
-  serverSyncSuccess,
-  serverSyncError,
-  type ServerSyncHandlerConfig,
-} from "./server";
+import { createSyncServer, serverSyncSuccess, serverSyncError } from "./server";
 import type { Schema, SyncRequestBody } from "./types";
 
 interface TestItem {
@@ -70,7 +65,7 @@ describe("createSyncServer", () => {
       const body = await response.json();
 
       expect(response.status).toBe(405);
-      expect(body.error).toBe("Method not allowed. Use POST.");
+      expect(body.error).toBe("Method not allowed");
     });
 
     it("rejects PUT requests with 405", async () => {
@@ -116,7 +111,7 @@ describe("createSyncServer", () => {
       const body = await response.json();
 
       expect(response.status).toBe(400);
-      expect(body.error).toBe("Invalid JSON body");
+      expect(body.error).toBe("Invalid JSON");
     });
 
     it("rejects empty body with 400", async () => {
@@ -127,7 +122,7 @@ describe("createSyncServer", () => {
       const body = await response.json();
 
       expect(response.status).toBe(400);
-      expect(body.error).toBe("Request body must contain 'query' and/or 'changes'");
+      expect(body.error).toBe("Missing query or changes");
     });
 
     it("rejects body without query or changes", async () => {
@@ -142,7 +137,7 @@ describe("createSyncServer", () => {
       const body = await response.json();
 
       expect(response.status).toBe(400);
-      expect(body.error).toBe("Request body must contain 'query' and/or 'changes'");
+      expect(body.error).toBe("Missing query or changes");
     });
 
     it("rejects non-array changes with 400", async () => {
@@ -159,7 +154,7 @@ describe("createSyncServer", () => {
       const body = await response.json();
 
       expect(response.status).toBe(400);
-      expect(body.error).toBe("Request body must contain 'query' and/or 'changes'");
+      expect(body.error).toBe("Missing query or changes");
     });
   });
 
@@ -198,7 +193,7 @@ describe("createSyncServer", () => {
       const body = await response.json();
 
       expect(response.status).toBe(501);
-      expect(body.error).toBe("Fetch handler not configured");
+      expect(body.error).toBe("Fetch not configured");
     });
 
     it("handles async fetch handler", async () => {
@@ -225,11 +220,8 @@ describe("createSyncServer", () => {
       });
       const request = createRequest<TestItem, TestQuery>({ query: { page: 1, limit: 10 } });
 
-      const response = await handler.handler(request);
-      const body = await response.json();
-
-      expect(response.status).toBe(500);
-      expect(body.error).toBe("Database connection failed");
+      // The simplified server throws errors from the handler
+      await expect(handler.handler(request)).rejects.toThrow("Database connection failed");
     });
   });
 
@@ -274,8 +266,7 @@ describe("createSyncServer", () => {
       const body = await response.json();
 
       expect(response.status).toBe(400);
-      expect(body.error).toContain("Validation error");
-      expect(body.error).toContain("page must be a number");
+      expect(body.error).toBe("page must be a number");
     });
 
     it("passes validated data to fetch handler", async () => {
@@ -354,7 +345,7 @@ describe("createSyncServer", () => {
       expect(body.syncResults[0]).toEqual({
         id: "temp-1",
         status: "error",
-        error: "Create handler not configured",
+        error: "create handler not configured",
       });
     });
   });
@@ -408,7 +399,7 @@ describe("createSyncServer", () => {
       const response = await handler.handler(request);
       const body = await response.json();
 
-      expect(body.syncResults[0].error).toBe("Update handler not configured");
+      expect(body.syncResults[0].error).toBe("update handler not configured");
     });
   });
 
@@ -456,7 +447,7 @@ describe("createSyncServer", () => {
       const response = await handler.handler(request);
       const body = await response.json();
 
-      expect(body.syncResults[0].error).toBe("Delete handler not configured");
+      expect(body.syncResults[0].error).toBe("delete handler not configured");
     });
   });
 
@@ -504,7 +495,7 @@ describe("createSyncServer", () => {
       expect(body.syncResults[0]).toEqual({
         id: "temp-1",
         status: "error",
-        error: "Validation failed: email must be valid",
+        error: "email must be valid",
       });
     });
 
@@ -619,7 +610,7 @@ describe("createSyncServer", () => {
       expect(body.syncResults[0]).toEqual({
         id: "1",
         status: "error",
-        error: "Unknown change type: unknown",
+        error: "unknown handler not configured",
       });
     });
   });
@@ -728,83 +719,6 @@ describe("createSyncServer", () => {
     });
   });
 
-  describe("Direct Method Access", () => {
-    it("fetchItems works directly", async () => {
-      const handler = createSyncServer<TestItem, TestQuery>({
-        fetch: (query, _ctx) => mockItems.slice(0, query.limit),
-      });
-      const query = { page: 1, limit: 2 };
-      const ctx = { body: { query } };
-
-      const items = await handler.fetchItems(query, ctx);
-
-      expect(items).toEqual(mockItems.slice(0, 2));
-    });
-
-    it("fetchItems throws when not configured", async () => {
-      const handler = createSyncServer<TestItem, TestQuery>({});
-      const query = { page: 1, limit: 10 };
-      const ctx = { body: { query } };
-
-      await expect(handler.fetchItems(query, ctx)).rejects.toThrow("Fetch handler not configured");
-    });
-
-    it("processChanges works directly", async () => {
-      const handler = createSyncServer<TestItem>({
-        create: (_data, _ctx) => serverSyncSuccess({ newId: "new-1" }),
-        update: (_id, _data, _ctx) => serverSyncSuccess(),
-      });
-      const changes = [
-        { id: "temp-1", type: "create" as const, data: { id: "temp-1", name: "New" } },
-        { id: "1", type: "update" as const, data: { id: "1", name: "Updated" } },
-      ];
-      const ctx = { body: { changes } };
-
-      const results = await handler.processChanges(changes, ctx);
-
-      expect(results).toHaveLength(2);
-      expect(results[0].status).toBe("success");
-      expect(results[1].status).toBe("success");
-    });
-
-    it("processChangesWithStats returns categorized results", async () => {
-      const handler = createSyncServer<TestItem>({
-        create: (data, _ctx) =>
-          data.name === "fail" ? serverSyncError("Failed") : serverSyncSuccess({ newId: data.id }),
-      });
-      const changes = [
-        { id: "1", type: "create" as const, data: { id: "1", name: "success" } },
-        { id: "2", type: "create" as const, data: { id: "2", name: "fail" } },
-      ];
-      const ctx = { body: { changes } };
-
-      const batchResult = await handler.processChangesWithStats(changes, ctx);
-
-      expect(batchResult.results).toHaveLength(2);
-      expect(batchResult.successful).toHaveLength(1);
-      expect(batchResult.failed).toHaveLength(1);
-      expect(batchResult.allSucceeded).toBe(false);
-      expect(batchResult.anySucceeded).toBe(true);
-      expect(batchResult.summary).toEqual({ total: 2, succeeded: 1, failed: 1 });
-    });
-
-    it("handlers object exposes individual handlers", () => {
-      const config: ServerSyncHandlerConfig<TestItem, TestQuery> = {
-        fetch: (_query, _ctx) => mockItems,
-        create: (_data, _ctx) => serverSyncSuccess(),
-        update: (_id, _data, _ctx) => serverSyncSuccess(),
-        delete: (_id, _data, _ctx) => serverSyncSuccess(),
-      };
-
-      const handler = createSyncServer<TestItem, TestQuery>(config);
-
-      expect(handler.handlers.fetch).toBe(config.fetch);
-      expect(handler.handlers.create).toBe(config.create);
-      expect(handler.handlers.update).toBe(config.update);
-      expect(handler.handlers.delete).toBe(config.delete);
-    });
-  });
-
   describe("Response Headers", () => {
     it("returns JSON content type", async () => {
       const handler = createSyncServer<TestItem, TestQuery>({
@@ -836,7 +750,8 @@ describe("createSyncServer", () => {
       const body = await response.json();
 
       expect(response.status).toBe(200);
-      expect(body.syncResults).toEqual([]);
+      // Empty changes array doesn't populate syncResults
+      expect(body.syncResults).toBeUndefined();
     });
 
     it("handles null query value", async () => {
@@ -853,7 +768,7 @@ describe("createSyncServer", () => {
       const body = await response.json();
 
       expect(response.status).toBe(400);
-      expect(body.error).toBe("Request body must contain 'query' and/or 'changes'");
+      expect(body.error).toBe("Missing query or changes");
     });
 
     it("handles sync return values (not async)", async () => {

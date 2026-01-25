@@ -40,6 +40,19 @@ export type SyncResult = {
   newId?: string; // For create operations: the server-assigned ID to replace the temporary ID
 };
 
+// Unified onSync params and result
+export type OnSyncParams<T, C, Q = unknown> = {
+  changes?: Change<T>[];
+  query?: Q;
+  signal: AbortSignal;
+  context: C;
+};
+
+export type OnSyncResult<T> = {
+  queryResults: T[];
+  syncResults: SyncResult[];
+};
+
 // ID mapping from temporary to permanent ID (for create operations)
 export type IdMapping = {
   tempId: string;
@@ -66,7 +79,7 @@ export type SyncQueueState<T> = {
 export type FetchState = "idle" | "fetching" | "error";
 
 // Config
-export type Config<T extends object, C> = {
+export type Config<T extends object, C, Q = unknown> = {
   id: string;
   initialContext: C;
   getId: (item: T) => string;
@@ -89,7 +102,9 @@ export type Config<T extends object, C> = {
   getNodeId?: () => string; // Custom node ID generator (default: lodash uniqueId)
   nodeSeparator?: string; // Separator for node IDs (default: ".")
 
-  // Handlers
-  onFetch: (context: C, signal: AbortSignal) => Promise<T[]>;
-  onSync?: (changes: Change<T>[], context: C, signal: AbortSignal) => Promise<SyncResult[]>;
+  // Query parsing - compute query from context for onSync
+  parseQuery?: (context: C) => Q;
+
+  // Unified handler for fetch and sync
+  onSync: (params: OnSyncParams<T, C, Q>) => Promise<OnSyncResult<T>>;
 };

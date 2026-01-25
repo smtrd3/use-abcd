@@ -1,327 +1,143 @@
-import type { Change, SyncResult } from "../types";
-import {
-  type SyncHandlerResult,
-  type SyncBatchResult,
-  type SyncRequestBody,
-  type SyncResponseBody,
-  categorizeResults,
-} from "./types";
+import type { Change, SyncResult, OnSyncParams, OnSyncResult } from "../types";
+import type { SyncHandlerResult, SyncRequestBody, SyncResponseBody } from "./types";
 
-export type { SyncHandlerResult, SyncBatchResult };
-export { categorizeResults };
+export type { SyncHandlerResult };
 
-// ============================================================================
-// Types
-// ============================================================================
-
-export type CreateHandler<T> = (data: T, signal: AbortSignal) => Promise<SyncHandlerResult>;
-export type UpdateHandler<T> = (
-  id: string,
-  data: T,
-  signal: AbortSignal,
-) => Promise<SyncHandlerResult>;
-export type DeleteHandler<T> = (
-  id: string,
-  data: T,
-  signal: AbortSignal,
-) => Promise<SyncHandlerResult>;
-
-export type SyncBuilderConfig<T> = {
-  create?: CreateHandler<T>;
-  update?: UpdateHandler<T>;
-  delete?: DeleteHandler<T>;
+export type SyncClientConfig<T, Q = unknown> = {
+  endpoint?: string;
+  headers?: Record<string, string>;
+  fetch?: (query: Q, signal: AbortSignal) => Promise<T[]>;
+  create?: (data: T, signal: AbortSignal) => Promise<SyncHandlerResult>;
+  update?: (id: string, data: T, signal: AbortSignal) => Promise<SyncHandlerResult>;
+  delete?: (id: string, data: T, signal: AbortSignal) => Promise<SyncHandlerResult>;
 };
 
-export type SyncBuilder<T, C = unknown> = {
-  onSync: (changes: Change<T>[], context: C, signal: AbortSignal) => Promise<SyncResult[]>;
-  handlers: {
-    create?: CreateHandler<T>;
-    update?: UpdateHandler<T>;
-    delete?: DeleteHandler<T>;
-  };
-};
-
-export type FetchToSyncResultOptions = {
-  fetch: Promise<Response>;
-  parseResponse?: (response: Response) => Promise<{ newId?: string }>;
-  parseError?: string | ((error: unknown) => string);
-};
-
-// ============================================================================
-// Change Processing
-// ============================================================================
-
-type ChangeProcessor<T> = {
-  guard: (config: SyncBuilderConfig<T>) => boolean;
-  execute: (
-    change: Change<T>,
-    config: SyncBuilderConfig<T>,
-    signal: AbortSignal,
-  ) => Promise<SyncHandlerResult>;
-  toResult: (change: Change<T>, result: SyncHandlerResult) => SyncResult;
-};
-
-function createChangeProcessors<T>(): Record<string, ChangeProcessor<T>> {
-  return {
-    create: {
-      guard: (config) => !!config.create,
-      execute: (change, config, signal) => config.create!(change.data, signal),
-      toResult: (change, result) =>
-        result.success === true
-          ? { id: change.id, status: "success" as const, newId: result.newId }
-          : { id: change.id, status: "error" as const, error: result.error },
-    },
-
-    update: {
-      guard: (config) => !!config.update,
-      execute: (change, config, signal) => config.update!(change.id, change.data, signal),
-      toResult: (change, result) =>
-        result.success === true
-          ? { id: change.id, status: "success" as const }
-          : { id: change.id, status: "error" as const, error: result.error },
-    },
-
-    delete: {
-      guard: (config) => !!config.delete,
-      execute: (change, config, signal) => config.delete!(change.id, change.data, signal),
-      toResult: (change, result) =>
-        result.success === true
-          ? { id: change.id, status: "success" as const }
-          : { id: change.id, status: "error" as const, error: result.error },
-    },
-  };
-}
+export const syncSuccess = (opts?: { newId?: string }): SyncHandlerResult => ({
+  success: true,
+  ...opts,
+});
+export const syncError = (error: string): SyncHandlerResult => ({ success: false, error });
 
 async function processChange<T>(
   change: Change<T>,
-  config: SyncBuilderConfig<T>,
+  config: SyncClientConfig<T>,
   signal: AbortSignal,
 ): Promise<SyncResult> {
-  if (signal.aborted) {
-    return { id: change.id, status: "error", error: "Operation aborted" };
-  }
-
-  const processors = createChangeProcessors<T>();
-  const processor = processors[change.type];
-
-  if (!processor) {
-    return { id: change.id, status: "error", error: `Unknown change type: ${change.type}` };
-  }
-
-  // If handler not configured, treat as success (offline-first support)
-  if (!processor.guard(config)) {
-    return { id: change.id, status: "success" };
-  }
+  if (signal.aborted) return { id: change.id, status: "error", error: "Aborted" };
 
   try {
-    const result = await processor.execute(change, config, signal);
-    return processor.toResult(change, result);
-  } catch (error) {
+    let result: SyncHandlerResult;
+    if (change.type === "create" && config.create) {
+      result = await config.create(change.data, signal);
+    } else if (change.type === "update" && config.update) {
+      result = await config.update(change.id, change.data, signal);
+    } else if (change.type === "delete" && config.delete) {
+      result = await config.delete(change.id, change.data, signal);
+    } else {
+      return { id: change.id, status: "success" }; // offline-first: no handler = success
+    }
+
+    if (result.success === true) {
+      return { id: change.id, status: "success", newId: result.newId };
+    }
     return {
       id: change.id,
       status: "error",
-      error: error instanceof Error ? error.message : "Unknown error",
+      error: (result as { success: false; error: string }).error,
+    };
+  } catch (e) {
+    return {
+      id: change.id,
+      status: "error",
+      error: e instanceof Error ? e.message : "Unknown error",
     };
   }
 }
 
-// ============================================================================
-// Public API
-// ============================================================================
+async function endpointSync<T, C, Q>(
+  endpoint: string,
+  headers: Record<string, string>,
+  params: OnSyncParams<T, C, Q>,
+): Promise<OnSyncResult<T>> {
+  const { changes, query, signal } = params;
+  const hasQuery = query !== undefined;
+  const hasChanges = changes && changes.length > 0;
 
-export function createSyncClient<T, C = unknown>(config: SyncBuilderConfig<T>): SyncBuilder<T, C> {
-  const onSync = async (
-    changes: Change<T>[],
-    _context: C,
-    signal: AbortSignal,
-  ): Promise<SyncResult[]> => {
-    return Promise.all(changes.map((change) => processChange(change, config, signal)));
-  };
-
-  return {
-    onSync,
-    handlers: { create: config.create, update: config.update, delete: config.delete },
-  };
-}
-
-export function createSyncClientWithStats<T, C = unknown>(
-  config: SyncBuilderConfig<T>,
-): {
-  onSync: (changes: Change<T>[], context: C, signal: AbortSignal) => Promise<SyncResult[]>;
-  onSyncWithStats: (
-    changes: Change<T>[],
-    context: C,
-    signal: AbortSignal,
-  ) => Promise<SyncBatchResult>;
-  handlers: { create?: CreateHandler<T>; update?: UpdateHandler<T>; delete?: DeleteHandler<T> };
-} {
-  const { onSync, handlers } = createSyncClient<T, C>(config);
-
-  const onSyncWithStats = async (
-    changes: Change<T>[],
-    context: C,
-    signal: AbortSignal,
-  ): Promise<SyncBatchResult> => {
-    const results = await onSync(changes, context, signal);
-    return categorizeResults(results);
-  };
-
-  return { onSync, onSyncWithStats, handlers };
-}
-
-export function syncSuccess(options?: { newId?: string }): SyncHandlerResult {
-  return { success: true, ...options };
-}
-
-export function syncError(error: string): SyncHandlerResult {
-  return { success: false, error };
-}
-
-export type EndpointSyncClientConfig = {
-  endpoint: string;
-  headers?: Record<string, string>;
-  scope?: string;
-};
-
-export type EndpointSyncClient<T, Q = unknown> = {
-  onFetch: (query: Q, signal: AbortSignal) => Promise<T[]>;
-  onSync: (changes: Change<T>[], context: Q, signal: AbortSignal) => Promise<SyncResult[]>;
-};
-
-export function createSyncClientFromEndpoint<T, Q = unknown>(
-  config: string | EndpointSyncClientConfig,
-): EndpointSyncClient<T, Q> {
-  const endpoint = typeof config === "string" ? config : config.endpoint;
-  const headers = typeof config === "string" ? {} : (config.headers ?? {});
-  const scope = typeof config === "string" ? undefined : config.scope;
-
-  const onFetch = async (query: Q, signal: AbortSignal): Promise<T[]> => {
-    if (signal.aborted) {
-      throw new Error("Operation aborted");
-    }
-
-    try {
-      const body: SyncRequestBody<T, Q> = { scope, query };
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...headers },
-        body: JSON.stringify(body),
-        signal,
-      });
-
-      if (!response.ok) {
-        let errorMsg = "Fetch request failed";
-        try {
-          const errorBody = await response.json();
-          if (errorBody.error) errorMsg = errorBody.error;
-        } catch {
-          // Ignore JSON parse errors
-        }
-        throw new Error(errorMsg);
-      }
-
-      const responseBody: SyncResponseBody<T> = await response.json();
-      return responseBody.results ?? [];
-    } catch (error) {
-      if (error instanceof Error && error.name === "AbortError") {
-        throw new Error("Operation aborted");
-      }
-      throw error;
-    }
-  };
-
-  const onSync = async (
-    changes: Change<T>[],
-    _context: Q,
-    signal: AbortSignal,
-  ): Promise<SyncResult[]> => {
-    if (signal.aborted) {
-      return changes.map((c) => ({
-        id: c.id,
-        status: "error" as const,
-        error: "Operation aborted",
-      }));
-    }
-
-    try {
-      const body: SyncRequestBody<T, Q> = { scope, changes };
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...headers },
-        body: JSON.stringify(body),
-        signal,
-      });
-
-      if (!response.ok) {
-        let errorMsg = "Sync request failed";
-        try {
-          const errorBody = await response.json();
-          if (errorBody.error) errorMsg = errorBody.error;
-        } catch {
-          // Ignore JSON parse errors
-        }
-        return changes.map((c) => ({ id: c.id, status: "error" as const, error: errorMsg }));
-      }
-
-      const responseBody: SyncResponseBody<T> = await response.json();
-      return (
-        responseBody.syncResults ??
-        changes.map((c) => ({
-          id: c.id,
-          status: "error" as const,
-          error: "No sync results returned",
-        }))
-      );
-    } catch (error) {
-      const errorMsg =
-        error instanceof Error && error.name === "AbortError"
-          ? "Operation aborted"
-          : error instanceof Error
-            ? error.message
-            : "Unknown error";
-      return changes.map((c) => ({ id: c.id, status: "error" as const, error: errorMsg }));
-    }
-  };
-
-  return { onFetch, onSync };
-}
-
-export async function fetchToSyncResult(
-  options: FetchToSyncResultOptions,
-): Promise<SyncHandlerResult> {
-  const { fetch: fetchPromise, parseResponse, parseError } = options;
-
-  const getErrorMessage = (error: unknown): string => {
-    if (typeof parseError === "function") return parseError(error);
-    if (typeof parseError === "string") return parseError;
-    return error instanceof Error ? error.message : "Request failed";
-  };
+  // Build request body with both query and changes if present
+  const body: SyncRequestBody<T, Q> = {};
+  if (hasQuery) body.query = query;
+  if (hasChanges) body.changes = changes;
 
   try {
-    const response = await fetchPromise;
+    const res = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...headers },
+      body: JSON.stringify(body),
+      signal,
+    });
 
-    if (!response.ok) {
-      let error: unknown = new Error("Request failed");
-      try {
-        const body = await response.json();
-        if (body.message) error = new Error(body.message);
-        else if (body.error) error = new Error(body.error);
-      } catch {
-        // Ignore JSON parse errors
-      }
-      return { success: false, error: getErrorMessage(error) };
+    if (!res.ok) {
+      const errMsg = await res
+        .json()
+        .then((b) => b.error)
+        .catch(() => "Request failed");
+      // If only fetching (no changes), throw error
+      if (!hasChanges) throw new Error(errMsg);
+      return {
+        queryResults: [],
+        syncResults: changes.map((c) => ({ id: c.id, status: "error", error: errMsg })),
+      };
     }
 
-    if (parseResponse) {
-      const result = await parseResponse(response);
-      return { success: true, ...result };
-    }
-
-    return { success: true };
-  } catch (error) {
-    if (error instanceof Error && error.name === "AbortError") {
-      return { success: false, error: "Operation aborted" };
-    }
-    return { success: false, error: getErrorMessage(error) };
+    const data: SyncResponseBody<T> = await res.json();
+    return {
+      queryResults: data.results ?? [],
+      syncResults:
+        data.syncResults ??
+        (hasChanges
+          ? changes.map((c) => ({ id: c.id, status: "error", error: "No results" }))
+          : []),
+    };
+  } catch (e) {
+    const err = e instanceof Error ? e.message : "Unknown error";
+    // If only fetching (no changes), throw error
+    if (!hasChanges) throw new Error(err);
+    return {
+      queryResults: [],
+      syncResults: changes.map((c) => ({ id: c.id, status: "error", error: err })),
+    };
   }
+}
+
+export function createSyncClient<T, C = unknown, Q = unknown>(
+  config: SyncClientConfig<T, Q>,
+): {
+  onSync: (params: OnSyncParams<T, C, Q>) => Promise<OnSyncResult<T>>;
+} {
+  const onSync = async (params: OnSyncParams<T, C, Q>): Promise<OnSyncResult<T>> => {
+    const { changes, query, signal } = params;
+    const hasQuery = query !== undefined;
+    const hasChanges = changes && changes.length > 0;
+
+    // Warn and return empty results if neither query nor changes provided
+    if (!hasQuery && !hasChanges) {
+      console.warn("[createSyncClient] onSync called without query or changes");
+      return { queryResults: [], syncResults: [] };
+    }
+
+    // Endpoint mode - handles both query and changes together
+    if (config.endpoint) {
+      return endpointSync<T, C, Q>(config.endpoint, config.headers ?? {}, params);
+    }
+
+    // Handler mode - process query and changes independently
+    const queryResults = hasQuery && config.fetch ? await config.fetch(query as Q, signal) : [];
+    const syncResults = hasChanges
+      ? await Promise.all(changes.map((c) => processChange(c, config, signal)))
+      : [];
+
+    return { queryResults, syncResults };
+  };
+
+  return { onSync };
 }

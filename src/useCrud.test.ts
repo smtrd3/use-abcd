@@ -20,7 +20,7 @@ describe("useCrud", () => {
       id: "test-crud",
       initialContext: {},
       getId: (item) => item.id,
-      onFetch: async () => [],
+      onSync: async () => ({ queryResults: [], syncResults: [] }),
     };
   });
 

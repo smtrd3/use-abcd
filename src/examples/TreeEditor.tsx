@@ -55,7 +55,7 @@ const TreeConfig: TreeConfig<FileData, FileContext> = {
   getId: (item) => item.id,
   rootId: "root",
   getNodeId: () => `node-${++nodeCounter}`,
-  onFetch: async () => initialTreeData,
+  onSync: async () => ({ queryResults: initialTreeData, syncResults: [] }),
 };
 
 // Recursive tree node component

@@ -40,34 +40,16 @@ export type {
   Result,
   Fn,
   Mutator,
+  OnSyncParams,
+  OnSyncResult,
 } from "./types";
 
-// Sync utilities (Client-side only - server utilities are in use-abcd/runtime/server)
-export {
-  // Shared
-  categorizeResults,
-  // Client
-  createSyncClient,
-  createSyncClientWithStats,
-  createSyncClientFromEndpoint,
-  syncSuccess,
-  syncError,
-  fetchToSyncResult,
-} from "./runtime";
+// Sync utilities
+export { createSyncClient, syncSuccess, syncError } from "./runtime";
 export type {
-  // Shared
   SyncHandlerResult,
-  SyncBatchResult,
   Schema,
   SyncRequestBody,
   SyncResponseBody,
-  // Client
-  CreateHandler,
-  UpdateHandler,
-  DeleteHandler,
-  SyncBuilderConfig,
-  SyncBuilder,
-  FetchToSyncResultOptions,
-  EndpointSyncClientConfig,
-  EndpointSyncClient,
+  SyncClientConfig,
 } from "./runtime";

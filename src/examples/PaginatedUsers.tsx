@@ -1,6 +1,5 @@
 import React, { useCallback, useState, useEffect } from "react";
-import { useCrud, type Config } from "../useCrud";
-import { createSyncClient, fetchToSyncResult } from "../runtime";
+import { useCrud, type Config, type SyncResult } from "../useCrud";
 
 interface User {
   id: string;
@@ -29,75 +28,65 @@ const notifyMetaListeners = () => {
 
 const UsersConfig: Config<User, UserContext> = {
   id: "users-paginated",
-  initialContext: {
-    page: 1,
-    limit: 5,
-  },
+  initialContext: { page: 1, limit: 5 },
   getId: (item) => item.id,
-
   syncDebounce: 300,
   syncRetries: 3,
   cacheCapacity: 10,
   cacheTtl: 60000,
 
-  onFetch: async (context, signal) => {
-    const params = new URLSearchParams({
-      page: String(context.page),
-      limit: String(context.limit),
-    });
+  onSync: async ({ changes, context, signal }) => {
+    // Fetch mode
+    if (!changes?.length) {
+      const params = new URLSearchParams({
+        page: String(context.page),
+        limit: String(context.limit),
+      });
+      const response = await fetch(`/api/users?${params}`, { signal });
+      const data = await response.json();
+      paginationMeta = { total: data.metadata.total, hasMore: data.metadata.hasMore };
+      notifyMetaListeners();
+      return { queryResults: data.items, syncResults: [] };
+    }
 
-    const response = await fetch(`/api/users?${params}`, { signal });
-    const data = await response.json();
-
-    // Store pagination metadata
-    paginationMeta = {
-      total: data.metadata.total,
-      hasMore: data.metadata.hasMore,
-    };
-    notifyMetaListeners();
-
-    return data.items;
+    // Sync mode
+    const syncResults: SyncResult[] = [];
+    for (const change of changes) {
+      try {
+        if (change.type === "create") {
+          const res = await fetch("/api/users", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(change.data),
+            signal,
+          });
+          if (!res.ok) throw new Error("Failed to create user");
+          const data = await res.json();
+          syncResults.push({ id: change.id, status: "success", newId: data.id });
+        } else if (change.type === "update") {
+          const res = await fetch(`/api/users/${change.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(change.data),
+            signal,
+          });
+          if (!res.ok) throw new Error("Failed to update user");
+          syncResults.push({ id: change.id, status: "success" });
+        } else if (change.type === "delete") {
+          const res = await fetch(`/api/users/${change.id}`, { method: "DELETE", signal });
+          if (!res.ok) throw new Error("Failed to delete user");
+          syncResults.push({ id: change.id, status: "success" });
+        }
+      } catch (e) {
+        syncResults.push({
+          id: change.id,
+          status: "error",
+          error: e instanceof Error ? e.message : "Unknown",
+        });
+      }
+    }
+    return { queryResults: [], syncResults };
   },
-
-  onSync: createSyncClient<User>({
-    create: async (data, signal) => {
-      return fetchToSyncResult({
-        fetch: fetch("/api/users", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(data),
-          signal,
-        }),
-        parseResponse: async (response) => {
-          const result = await response.json();
-          return { newId: result.id };
-        },
-        parseError: "Failed to create user",
-      });
-    },
-
-    update: async (id, data, signal) => {
-      return fetchToSyncResult({
-        fetch: fetch(`/api/users/${id}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(data),
-          signal,
-        }),
-        parseError: "Failed to update user",
-      });
-    },
-
-    delete: async (id, _data, signal) => {
-      return fetchToSyncResult({
-        fetch: fetch(`/api/users/${id}`, {
-          method: "DELETE",
-          signal,
-        }),
-        parseError: "Failed to delete user",
-      });
-    },
-  }).onSync,
 };
 
 export const PaginatedUsers = React.memo(function PaginatedUsers() {

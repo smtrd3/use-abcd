@@ -20,10 +20,13 @@ describe("Item Cache with WeakMap", () => {
       id: "test-item-cache",
       initialContext: {},
       getId: (item) => item.id,
-      onFetch: async () => [
-        { id: "1", name: "Item 1", value: 100 },
-        { id: "2", name: "Item 2", value: 200 },
-      ],
+      onSync: async () => ({
+        queryResults: [
+          { id: "1", name: "Item 1", value: 100 },
+          { id: "2", name: "Item 2", value: 200 },
+        ],
+        syncResults: [],
+      }),
     };
   });
 
@@ -126,18 +129,14 @@ describe("Item Cache with WeakMap", () => {
     it("creates new Item after ID remapping", async () => {
       const configWithSync: Config<TestItem, TestContext> = {
         ...config,
-        onSync: async (changes) => {
-          return changes.map((change) => {
+        onSync: async ({ changes }) => {
+          const syncResults = (changes ?? []).map((change) => {
             if (change.type === "create") {
-              // Simulate server assigning permanent ID
-              return {
-                id: change.id,
-                status: "success" as const,
-                newId: `server-${change.id}`,
-              };
+              return { id: change.id, status: "success" as const, newId: `server-${change.id}` };
             }
             return { id: change.id, status: "success" as const };
           });
+          return { queryResults: [], syncResults };
         },
       };
 
@@ -177,12 +176,15 @@ describe("Item Cache with WeakMap", () => {
       let fetchCount = 0;
       const dynamicConfig: Config<TestItem, TestContext> = {
         ...config,
-        onFetch: async () => {
+        onSync: async () => {
           fetchCount++;
-          return [
-            { id: "1", name: "Item 1", value: fetchCount === 1 ? 100 : 150 },
-            { id: "2", name: "Item 2", value: 200 },
-          ];
+          return {
+            queryResults: [
+              { id: "1", name: "Item 1", value: fetchCount === 1 ? 100 : 150 },
+              { id: "2", name: "Item 2", value: 200 },
+            ],
+            syncResults: [],
+          };
         },
       };
 
@@ -396,14 +398,17 @@ describe("Item Cache with WeakMap", () => {
     it("handles context changes correctly", async () => {
       const contextConfig: Config<TestItem, TestContext> = {
         ...config,
-        onFetch: async (context) => {
+        onSync: async ({ context }) => {
           if (context.filter === "high") {
-            return [{ id: "2", name: "Item 2", value: 200 }];
+            return { queryResults: [{ id: "2", name: "Item 2", value: 200 }], syncResults: [] };
           }
-          return [
-            { id: "1", name: "Item 1", value: 100 },
-            { id: "2", name: "Item 2", value: 200 },
-          ];
+          return {
+            queryResults: [
+              { id: "1", name: "Item 1", value: 100 },
+              { id: "2", name: "Item 2", value: 200 },
+            ],
+            syncResults: [],
+          };
         },
       };
 

@@ -2,12 +2,13 @@ import { create } from "mutative";
 import { Cache } from "./cache";
 import type { FetchState } from "./types";
 
-export type FetchHandlerConfig<T, C> = {
+export type FetchHandlerConfig<T, C, Q = unknown> = {
   id: string;
   cacheCapacity: number;
   cacheTtl: number;
   retries?: number;
-  onFetch: (context: C, signal: AbortSignal) => Promise<T[]>;
+  parseQuery?: (context: C) => Q;
+  onFetch: (query: Q, context: C, signal: AbortSignal) => Promise<T[]>;
 };
 
 export type FetchHandlerState<T> = {
@@ -17,15 +18,15 @@ export type FetchHandlerState<T> = {
   retryCount?: number;
 };
 
-export class FetchHandler<T, C> {
-  private _config: FetchHandlerConfig<T, C>;
+export class FetchHandler<T, C, Q = unknown> {
+  private _config: FetchHandlerConfig<T, C, Q>;
   private _cache: Cache<T[]>;
   private _state: FetchHandlerState<T> = { status: "idle", items: [] };
   private _subscribers = new Set<() => void>();
   private _abortController: AbortController | null = null;
   private _currentContext: C | null = null;
 
-  constructor(config: FetchHandlerConfig<T, C>) {
+  constructor(config: FetchHandlerConfig<T, C, Q>) {
     this._config = { retries: 0, ...config };
     this._cache = new Cache<T[]>(config.cacheCapacity, config.cacheTtl);
   }
@@ -41,6 +42,7 @@ export class FetchHandler<T, C> {
 
   private async _fetchWithRetry(context: C, signal: AbortSignal): Promise<T[]> {
     const maxRetries = this._config.retries!;
+    const query = (this._config.parseQuery?.(context) ?? {}) as Q;
     let lastError: unknown;
 
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
@@ -48,7 +50,7 @@ export class FetchHandler<T, C> {
 
       try {
         if (attempt > 0) this._setState({ retryCount: attempt });
-        return await this._config.onFetch(context, signal);
+        return await this._config.onFetch(query, context, signal);
       } catch (error) {
         lastError = error;
         if (signal.aborted || attempt === maxRetries) throw error;

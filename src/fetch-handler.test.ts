@@ -52,7 +52,7 @@ describe("FetchHandler", () => {
       id: "test-items",
       cacheCapacity: 5,
       cacheTtl: 5000,
-      onFetch: async (context, signal) => {
+      onFetch: async (_query, context, signal) => {
         const params = new URLSearchParams({
           page: String(context.page),
           limit: String(context.limit),

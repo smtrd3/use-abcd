@@ -20,7 +20,7 @@ describe("useCrudTree", () => {
       initialContext: {},
       getId: (item) => item.id,
       rootId: "root",
-      onFetch: async () => [],
+      onSync: async () => ({ queryResults: [], syncResults: [] }),
     };
   });
 

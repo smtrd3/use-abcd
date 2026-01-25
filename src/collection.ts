@@ -12,8 +12,7 @@ import type {
   SyncQueueState,
   FetchState,
   IdMapping,
-  Change,
-  SyncResult,
+  OnSyncResult,
 } from "./types";
 
 export type CollectionState<T, C> = {
@@ -27,16 +26,16 @@ export type CollectionState<T, C> = {
   fetchError?: string;
 };
 
-export class Collection<T extends object, C> {
+export class Collection<T extends object, C, Q = unknown> {
   // Global cache of collection instances by id
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private static _cache = new Map<string, Collection<any, any>>();
+  private static _cache = new Map<string, Collection<any, any, any>>();
 
   // Get or create a collection instance
-  static get<T extends object, C>(config: Config<T, C>): Collection<T, C> {
+  static get<T extends object, C, Q = unknown>(config: Config<T, C, Q>): Collection<T, C, Q> {
     const existing = Collection._cache.get(config.id);
     if (existing) {
-      return existing as Collection<T, C>;
+      return existing as Collection<T, C, Q>;
     }
     const collection = new Collection(config);
     Collection._cache.set(config.id, collection);
@@ -54,16 +53,16 @@ export class Collection<T extends object, C> {
   }
 
   // Get existing collection by ID (returns undefined if not found)
-  static getById<T extends object, C>(id: string): Collection<T, C> | undefined {
-    return Collection._cache.get(id) as Collection<T, C> | undefined;
+  static getById<T extends object, C, Q = unknown>(id: string): Collection<T, C, Q> | undefined {
+    return Collection._cache.get(id) as Collection<T, C, Q> | undefined;
   }
 
   readonly id: string;
-  readonly config: Config<T, C>;
+  readonly config: Config<T, C, Q>;
 
   private _state: CollectionState<T, C>;
   private _syncQueue: SyncQueue<T, C>;
-  private _fetchHandler: FetchHandler<T, C>;
+  private _fetchHandler: FetchHandler<T, C, Q>;
   private _itemCache: WeakMap<T & object, Item<T, C>> = new WeakMap();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private _nodeCache: WeakMap<TreeNode<any, any> & object, Node<any, C, any>> = new WeakMap();
@@ -72,30 +71,42 @@ export class Collection<T extends object, C> {
   private _hasInitialized = false;
   private _batchMode = false;
 
-  constructor(config: Config<T, C>) {
+  constructor(config: Config<T, C, Q>) {
     this.id = config.id;
     this.config = config;
 
-    // Initialize SyncQueue
-    // Default no-op sync handler for offline-first mode (all operations succeed locally)
-    const defaultOnSync = async (changes: Change<T>[]): Promise<SyncResult[]> =>
-      changes.map((c) => ({ id: c.id, status: "success" as const }));
+    const parseQuery = config.parseQuery ?? ((ctx: C) => ctx as unknown as Q);
 
+    // Default no-op sync handler for offline-first mode
+    const defaultOnSync = async (): Promise<OnSyncResult<T>> => ({
+      queryResults: [],
+      syncResults: [],
+    });
+    const onSync = config.onSync ?? defaultOnSync;
+
+    // Initialize SyncQueue with adapter
     this._syncQueue = new SyncQueue<T, C>({
       debounce: config.syncDebounce ?? 300,
       maxRetries: config.syncRetries ?? 3,
       getContext: () => this._state.context,
-      onSync: config.onSync ?? defaultOnSync,
+      onSync: async ({ changes, context, signal }) => {
+        const result = await onSync({ changes, context, signal });
+        return { syncResults: result.syncResults };
+      },
       onIdRemap: (mappings) => this._handleIdRemap(mappings),
     });
 
-    // Initialize FetchHandler
-    this._fetchHandler = new FetchHandler<T, C>({
+    // Initialize FetchHandler with adapter
+    this._fetchHandler = new FetchHandler<T, C, Q>({
       id: config.id,
       cacheCapacity: config.cacheCapacity ?? 10,
       cacheTtl: config.cacheTtl ?? 60000,
       retries: config.fetchRetries ?? 0,
-      onFetch: config.onFetch,
+      parseQuery,
+      onFetch: async (query, context, signal) => {
+        const result = await onSync({ query, context, signal });
+        return result.queryResults;
+      },
     });
 
     // Initialize state

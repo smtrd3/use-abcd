@@ -20,7 +20,7 @@ describe("Node", () => {
       initialContext: {},
       getId: (item) => item.id,
       rootId: "root",
-      onFetch: async () => [],
+      onSync: async () => ({ queryResults: [], syncResults: [] }),
     };
   });
 
@@ -1117,10 +1117,13 @@ describe("Node", () => {
       const customConfig: Config<TreeNode<TestValue>, TestContext> = {
         ...config,
         id: "test-node-status-pending",
-        onSync: async (changes) => {
+        onSync: async ({ changes }) => {
           // Delay sync to keep items in pending state
           await new Promise((resolve) => setTimeout(resolve, 500));
-          return changes.map((c) => ({ id: c.id, status: "success" as const }));
+          return {
+            queryResults: [],
+            syncResults: (changes ?? []).map((c) => ({ id: c.id, status: "success" as const })),
+          };
         },
       };
 

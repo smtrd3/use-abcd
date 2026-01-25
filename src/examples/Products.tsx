@@ -1,7 +1,6 @@
 import React, { useCallback, useState } from "react";
 import { useCrud, type Config, type SyncResult } from "../useCrud";
 import { useItem } from "../useItem";
-import type { Item } from "../item";
 
 interface Product {
   id: string;
@@ -18,47 +17,43 @@ interface ProductContext {
   search?: string;
 }
 
-const ProductsConfig: Config<Product, ProductContext> = {
-  id: "products",
-  initialContext: {
-    page: 1,
-    limit: 10,
-  },
-  getId: (item) => item.id,
+interface ProductQuery {
+  page: string;
+  limit: string;
+  category?: string;
+  search?: string;
+}
 
-  // Sync configuration
+const ProductsConfig: Config<Product, ProductContext, ProductQuery> = {
+  id: "products",
+  initialContext: { page: 1, limit: 10 },
+  getId: (item) => item.id,
   syncDebounce: 500,
   syncRetries: 3,
-
-  // Cache configuration
   cacheCapacity: 5,
-  cacheTtl: 30000, // 30 seconds
+  cacheTtl: 30000,
 
-  // Fetch products with pagination and filtering
-  onFetch: async (context, signal) => {
-    const params = new URLSearchParams({
-      page: String(context.page),
-      limit: String(context.limit),
-    });
+  parseQuery: (ctx) => ({
+    page: String(ctx.page),
+    limit: String(ctx.limit),
+    category: ctx.category,
+    search: ctx.search,
+  }),
 
-    if (context.category) {
-      params.append("category", context.category);
+  onSync: async ({ changes, query, signal }) => {
+    // Fetch mode - no changes
+    if (!changes?.length) {
+      const params = new URLSearchParams({ page: query.page, limit: query.limit });
+      if (query.category) params.append("category", query.category);
+      if (query.search) params.append("search", query.search);
+
+      const response = await fetch(`/api/products?${params}`, { signal });
+      const data = await response.json();
+      return { queryResults: data.items, syncResults: [] };
     }
 
-    if (context.search) {
-      params.append("search", context.search);
-    }
-
-    const response = await fetch(`/api/products?${params}`, { signal });
-    const data = await response.json();
-
-    return data.items;
-  },
-
-  // Sync changes (batch operation)
-  onSync: async (changes, _context, signal) => {
-    const results: SyncResult[] = [];
-
+    // Sync mode - process changes
+    const syncResults: SyncResult[] = [];
     for (const change of changes) {
       try {
         if (change.type === "create") {
@@ -68,14 +63,9 @@ const ProductsConfig: Config<Product, ProductContext> = {
             body: JSON.stringify(change.data),
             signal,
           });
-
-          if (!response.ok) {
-            throw new Error("Failed to create product");
-          }
-
+          if (!response.ok) throw new Error("Failed to create product");
           const data = await response.json();
-          // Return newId so the library can remap the temporary ID to the server-assigned ID
-          results.push({ id: change.id, status: "success", newId: data.id });
+          syncResults.push({ id: change.id, status: "success", newId: data.id });
         } else if (change.type === "update") {
           const response = await fetch(`/api/products/${change.id}`, {
             method: "PATCH",
@@ -83,43 +73,30 @@ const ProductsConfig: Config<Product, ProductContext> = {
             body: JSON.stringify(change.data),
             signal,
           });
-
-          if (!response.ok) {
-            throw new Error("Failed to update product");
-          }
-
-          results.push({ id: change.id, status: "success" });
+          if (!response.ok) throw new Error("Failed to update product");
+          syncResults.push({ id: change.id, status: "success" });
         } else if (change.type === "delete") {
           const response = await fetch(`/api/products/${change.id}`, {
             method: "DELETE",
             signal,
           });
-
-          if (!response.ok) {
-            throw new Error("Failed to delete product");
-          }
-
-          results.push({ id: change.id, status: "success" });
+          if (!response.ok) throw new Error("Failed to delete product");
+          syncResults.push({ id: change.id, status: "success" });
         }
       } catch (error) {
-        results.push({
+        syncResults.push({
           id: change.id,
           status: "error",
           error: error instanceof Error ? error.message : "Unknown error",
         });
       }
     }
-
-    return results;
+    return { queryResults: [], syncResults };
   },
 };
 
-const ProductItem = React.memo(function ProductItem({
-  item,
-}: {
-  item: Item<Product, ProductContext>;
-}) {
-  const { data: product, status, update, remove } = useItem(item);
+const ProductItem = React.memo(function ProductItem({ productId }: { productId: string }) {
+  const { data: product, status, update, remove } = useItem<Product>("products", productId);
   const [isEditing, setIsEditing] = useState(false);
   const [editedName, setEditedName] = useState(product?.name ?? "");
   const [editedPrice, setEditedPrice] = useState(product?.price ?? 0);
@@ -256,7 +233,6 @@ export const Products = React.memo(function Products() {
     pauseSync,
     resumeSync,
     retrySync,
-    getItem,
   } = useCrud<Product, ProductContext>(ProductsConfig);
 
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -471,7 +447,7 @@ export const Products = React.memo(function Products() {
         ) : (
           <div>
             {productList.map((product) => (
-              <ProductItem key={product.id} item={getItem(product.id)} />
+              <ProductItem key={product.id} productId={product.id} />
             ))}
           </div>
         )}

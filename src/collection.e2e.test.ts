@@ -4,7 +4,7 @@ import { setupServer } from "msw/node";
 import { http, HttpResponse, delay } from "msw";
 import { Collection } from "./collection";
 import { createSyncServer, serverSyncSuccess, serverSyncError } from "./runtime/server";
-import { createSyncClientFromEndpoint } from "./runtime";
+import { createSyncClient } from "./runtime";
 import type { Config } from "./types";
 import type { SyncRequestBody } from "./runtime";
 
@@ -150,13 +150,12 @@ describe("Collection E2E with MSW and createSyncServer", () => {
 
   // Helper to create a collection config
   const createConfig = (overrides?: Partial<Config<User, UserQuery>>): Config<User, UserQuery> => {
-    const { onFetch, onSync } = createSyncClientFromEndpoint<User, UserQuery>("/api/users");
+    const { onSync } = createSyncClient<User, UserQuery, UserQuery>({ endpoint: "/api/users" });
 
     return {
       id: `users-${Date.now()}-${Math.random()}`,
       initialContext: { page: 1, limit: 10 },
       getId: (user) => user.id,
-      onFetch,
       onSync,
       syncDebounce: 50, // Faster for tests
       ...overrides,
@@ -766,14 +765,13 @@ describe("Collection E2E with MSW and createSyncServer", () => {
 
   describe("Offline-First Mode (No onSync)", () => {
     it("works without onSync handler (pure offline mode)", async () => {
-      const { onFetch } = createSyncClientFromEndpoint<User, UserQuery>("/api/users");
+      const { onSync } = createSyncClient<User, UserQuery, UserQuery>({ endpoint: "/api/users" });
 
       const config: Config<User, UserQuery> = {
         id: `offline-${Date.now()}`,
         initialContext: { page: 1, limit: 10 },
         getId: (user) => user.id,
-        onFetch,
-        // No onSync - pure offline mode
+        onSync,
         syncDebounce: 50,
       };
 
