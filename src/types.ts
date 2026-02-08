@@ -19,7 +19,7 @@ export type ItemSyncStatus = "pending" | "syncing" | "success" | "error";
 
 export type ChangeType = "create" | "update" | "delete";
 
-export type Change<T> = {
+export type Change<T extends object> = {
   id: string;
   type: ChangeType;
   data: T;
@@ -41,16 +41,17 @@ export type SyncResult = {
 };
 
 // Unified onSync params and result
-export type OnSyncParams<T, C, Q = unknown> = {
+export type OnSyncParams<T extends object, C, Q = unknown> = {
   changes?: Change<T>[];
   query?: Q;
   signal: AbortSignal;
   context: C;
 };
 
-export type OnSyncResult<T> = {
+export type OnSyncResult<T extends object, S = unknown> = {
   queryResults: T[];
   syncResults: SyncResult[];
+  serverState?: S; // Optional server state (e.g., pagination: totalItems, nextCursor, etc.)
 };
 
 // ID mapping from temporary to permanent ID (for create operations)
@@ -60,14 +61,14 @@ export type IdMapping = {
 };
 
 // Error info for failed sync operations
-export type SyncError<T> = {
+export type SyncError<T extends object> = {
   error: string;
   retries: number;
   operations: Change<T>[]; // The operations that failed, for manual retry
 };
 
 // SyncQueue state (accessible via getState/subscribe)
-export type SyncQueueState<T> = {
+export type SyncQueueState<T extends object> = {
   queue: Map<string, Change<T>[]>; // pending changes per item (coalesced operations)
   inFlight: Map<string, Change<T>[]>; // currently syncing operations per item
   errors: Map<string, SyncError<T>>; // failed items with retry info and operations
@@ -89,6 +90,7 @@ export type Config<T extends object, C, Q = unknown> = {
   syncDebounce?: number; // ms, default 300
   syncRetries?: number; // default 3
   refetchOnMutation?: boolean; // refetch after create/delete, default false
+  enableEnqueue?: (context: C) => boolean; // whether to enqueue changes, default () => true
 
   // Cache configuration
   cacheCapacity?: number; // default 10
@@ -105,6 +107,6 @@ export type Config<T extends object, C, Q = unknown> = {
   // Query parsing - compute query from context for onSync
   parseQuery?: (context: C) => Q;
 
-  // Unified handler for fetch and sync
-  onSync: (params: OnSyncParams<T, C, Q>) => Promise<OnSyncResult<T>>;
+  // Unified handler for fetch and sync (optional - defaults to offline-first mode)
+  onSync?: (params: OnSyncParams<T, C, Q>) => Promise<OnSyncResult<T>>;
 };

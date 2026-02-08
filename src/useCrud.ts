@@ -16,8 +16,10 @@ export type {
   FetchState,
 } from "./types";
 
-export function useCrud<T extends object, C>(config: Config<T, C>) {
-  const collection = Collection.get(config);
+export function useCrud<T extends object, C, Q = unknown, S = unknown>(
+  config: Config<T, C, Q>,
+) {
+  const collection = Collection.get<T, C, Q, S>(config);
 
   const state = useSyncExternalStore(
     (callback) => collection.subscribe(callback),
@@ -29,6 +31,7 @@ export function useCrud<T extends object, C>(config: Config<T, C>) {
     // State (all from single immutable state object)
     items: state.items,
     context: state.context,
+    serverState: state.serverState,
     syncState: state.syncState,
     syncQueue: state.syncQueue,
     loading: state.loading,

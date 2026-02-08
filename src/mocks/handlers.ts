@@ -1,7 +1,61 @@
-import { http, HttpResponse, delay } from "msw";
+import { http, delay } from "msw";
+import { filter, find, findIndex, slice, size, toLower, includes, forEach } from "lodash-es";
+import { createSyncServer, serverSyncSuccess, serverSyncError } from "../runtime/server";
+
+// Types
+type Product = {
+  id: string;
+  name: string;
+  price: number;
+  category: string;
+  stock: number;
+};
+
+type User = {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+};
+
+type Comment = {
+  id: string;
+  postId: string;
+  text: string;
+  author: string;
+  createdAt: string;
+};
+
+type ProductQuery = {
+  page?: number;
+  limit?: number;
+  category?: string;
+  search?: string;
+};
+
+type UserQuery = {
+  page?: number;
+  limit?: number;
+};
+
+type CommentQuery = {
+  postId?: string;
+};
+
+type FileData = {
+  name: string;
+  content?: string;
+};
+
+type TreeNodeData = {
+  id: string;
+  position: number;
+  value: FileData;
+  type: string;
+};
 
 // Mock data stores
-const products = [
+const products: Product[] = [
   { id: "1", name: "Laptop", price: 999, category: "electronics", stock: 15 },
   { id: "2", name: "Headphones", price: 199, category: "electronics", stock: 30 },
   { id: "3", name: "Coffee Mug", price: 12, category: "kitchen", stock: 100 },
@@ -9,7 +63,7 @@ const products = [
   { id: "5", name: "Notebook", price: 5, category: "stationery", stock: 200 },
 ];
 
-const users = [
+const users: User[] = [
   { id: "1", name: "John Doe", email: "john@example.com", role: "admin" },
   { id: "2", name: "Jane Smith", email: "jane@example.com", role: "user" },
   { id: "3", name: "Bob Johnson", email: "bob@example.com", role: "user" },
@@ -24,7 +78,7 @@ const users = [
   { id: "12", name: "Julia Roberts", email: "julia@example.com", role: "admin" },
 ];
 
-const comments = [
+const comments: Comment[] = [
   {
     id: "1",
     postId: "1",
@@ -41,237 +95,229 @@ const comments = [
   },
 ];
 
+// Initial tree data simulating a file system
+const treeNodes: TreeNodeData[] = [
+  { id: "root", position: 0, value: { name: "Project" }, type: "object" },
+  { id: "root.src", position: 0, value: { name: "src" }, type: "object" },
+  {
+    id: "root.src.index",
+    position: 0,
+    value: { name: "index.ts", content: 'console.log("Hello World");' },
+    type: "primitive",
+  },
+  {
+    id: "root.src.utils",
+    position: 1,
+    value: {
+      name: "utils.ts",
+      content: "export function add(a: number, b: number) {\n  return a + b;\n}",
+    },
+    type: "primitive",
+  },
+  { id: "root.docs", position: 1, value: { name: "docs" }, type: "object" },
+  {
+    id: "root.docs.readme",
+    position: 0,
+    value: { name: "README.md", content: "# My Project\n\nThis is a demo project." },
+    type: "primitive",
+  },
+  {
+    id: "root.package",
+    position: 2,
+    value: { name: "package.json", content: '{\n  "name": "my-project",\n  "version": "1.0.0"\n}' },
+    type: "primitive",
+  },
+];
+
 // Simulate network delay
 const NETWORK_DELAY = 800;
 
-export const handlers = [
-  // Products - List with pagination and filtering
-  http.get("/api/products", async ({ request }) => {
-    await delay(NETWORK_DELAY);
-
-    const url = new URL(request.url);
-    const page = Number.parseInt(url.searchParams.get("page") || "1");
-    const limit = Number.parseInt(url.searchParams.get("limit") || "10");
-    const category = url.searchParams.get("category");
-    const search = url.searchParams.get("search");
+// Products sync server
+const productsServer = createSyncServer<Product, ProductQuery>({
+  fetch: (query) => {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 10;
+    const category = query.category;
+    const search = query.search;
 
     let filtered = [...products];
 
     if (category) {
-      filtered = filtered.filter((p) => p.category === category);
+      filtered = filter(filtered, (p) => p.category === category);
     }
 
     if (search) {
-      filtered = filtered.filter((p) => p.name.toLowerCase().includes(search.toLowerCase()));
+      filtered = filter(filtered, (p) => includes(toLower(p.name), toLower(search)));
     }
 
     const start = (page - 1) * limit;
     const end = start + limit;
-    const paginated = filtered.slice(start, end);
 
-    return HttpResponse.json({
-      items: paginated,
-      metadata: {
-        total: filtered.length,
-        page,
-        limit,
-        hasMore: end < filtered.length,
-      },
-    });
-  }),
-
-  // Products - Create
-  http.post("/api/products", async ({ request }) => {
-    await delay(NETWORK_DELAY);
-
-    const body = (await request.json()) as Partial<(typeof products)[0]>;
-    const newProduct = {
+    return slice(filtered, start, end);
+  },
+  create: (data) => {
+    const newProduct: Product = {
       id: String(Date.now()),
-      name: body.name || "",
-      price: body.price || 0,
-      category: body.category || "other",
-      stock: body.stock || 0,
+      name: data.name || "",
+      price: data.price || 0,
+      category: data.category || "other",
+      stock: data.stock || 0,
     };
-
     products.push(newProduct);
-
-    return HttpResponse.json({ id: newProduct.id }, { status: 201 });
-  }),
-
-  // Products - Update
-  http.patch("/api/products/:id", async ({ params, request }) => {
-    await delay(NETWORK_DELAY);
-
-    const { id } = params;
-    const body = (await request.json()) as Partial<(typeof products)[0]>;
-
-    const index = products.findIndex((p) => p.id === id);
+    return serverSyncSuccess({ newId: newProduct.id });
+  },
+  update: (id, data) => {
+    const index = findIndex(products, (p) => p.id === id);
     if (index === -1) {
-      return HttpResponse.json({ error: "Product not found" }, { status: 404 });
+      return serverSyncError("Product not found");
     }
-
-    products[index] = { ...products[index], ...body };
-
-    return HttpResponse.json({ id });
-  }),
-
-  // Products - Delete
-  http.delete("/api/products/:id", async ({ params }) => {
-    await delay(NETWORK_DELAY);
-
-    const { id } = params;
-    const index = products.findIndex((p) => p.id === id);
-
+    products[index] = { ...products[index], ...data };
+    return serverSyncSuccess();
+  },
+  delete: (id) => {
+    const index = findIndex(products, (p) => p.id === id);
     if (index === -1) {
-      return HttpResponse.json({ error: "Product not found" }, { status: 404 });
+      return serverSyncError("Product not found");
     }
-
     products.splice(index, 1);
+    return serverSyncSuccess();
+  },
+});
 
-    return HttpResponse.json({ id });
-  }),
-
-  // Users - List with pagination
-  http.get("/api/users", async ({ request }) => {
-    await delay(NETWORK_DELAY);
-
-    const url = new URL(request.url);
-    const page = Number.parseInt(url.searchParams.get("page") || "1");
-    const limit = Number.parseInt(url.searchParams.get("limit") || "10");
+// Users sync server
+const usersServer = createSyncServer<User, UserQuery>({
+  fetch: (query) => {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 10;
 
     const start = (page - 1) * limit;
     const end = start + limit;
-    const paginated = users.slice(start, end);
 
-    return HttpResponse.json({
-      items: paginated,
-      metadata: {
-        total: users.length,
-        page,
-        limit,
-        hasMore: end < users.length,
-      },
-    });
-  }),
-
-  // Users - Create
-  http.post("/api/users", async ({ request }) => {
-    await delay(NETWORK_DELAY);
-
-    const body = (await request.json()) as Partial<(typeof users)[0]>;
-    const newUser = {
+    return slice(users, start, end);
+  },
+  create: (data) => {
+    const newUser: User = {
       id: String(Date.now()),
-      name: body.name || "",
-      email: body.email || "",
-      role: body.role || "user",
+      name: data.name || "",
+      email: data.email || "",
+      role: data.role || "user",
     };
-
     users.push(newUser);
-
-    return HttpResponse.json({ id: newUser.id }, { status: 201 });
-  }),
-
-  // Users - Update
-  http.patch("/api/users/:id", async ({ params, request }) => {
-    await delay(NETWORK_DELAY);
-
-    const { id } = params;
-    const body = (await request.json()) as Partial<(typeof users)[0]>;
-
-    const index = users.findIndex((u) => u.id === id);
+    return serverSyncSuccess({ newId: newUser.id });
+  },
+  update: (id, data) => {
+    const index = findIndex(users, (u) => u.id === id);
     if (index === -1) {
-      return HttpResponse.json({ error: "User not found" }, { status: 404 });
+      return serverSyncError("User not found");
     }
-
-    users[index] = { ...users[index], ...body };
-
-    return HttpResponse.json({ id });
-  }),
-
-  // Users - Delete
-  http.delete("/api/users/:id", async ({ params }) => {
-    await delay(NETWORK_DELAY);
-
-    const { id } = params;
-    const index = users.findIndex((u) => u.id === id);
-
+    users[index] = { ...users[index], ...data };
+    return serverSyncSuccess();
+  },
+  delete: (id) => {
+    const index = findIndex(users, (u) => u.id === id);
     if (index === -1) {
-      return HttpResponse.json({ error: "User not found" }, { status: 404 });
+      return serverSyncError("User not found");
     }
-
     users.splice(index, 1);
+    return serverSyncSuccess();
+  },
+});
 
-    return HttpResponse.json({ id });
-  }),
-
-  // Comments - List
-  http.get("/api/comments", async ({ request }) => {
-    await delay(NETWORK_DELAY);
-
-    const url = new URL(request.url);
-    const postId = url.searchParams.get("postId");
-
-    let filtered = [...comments];
-
-    if (postId) {
-      filtered = filtered.filter((c) => c.postId === postId);
+// Tree sync server
+const treeServer = createSyncServer<TreeNodeData>({
+  fetch: () => [...treeNodes],
+  create: (data) => {
+    const newNode: TreeNodeData = {
+      id: data.id,
+      position: data.position ?? 0,
+      value: data.value ?? { name: "" },
+      type: data.type ?? "primitive",
+    };
+    treeNodes.push(newNode);
+    return serverSyncSuccess({ newId: newNode.id });
+  },
+  update: (id, data) => {
+    const index = findIndex(treeNodes, (n) => n.id === id);
+    if (index === -1) {
+      return serverSyncError("Node not found");
     }
-
-    return HttpResponse.json({
-      items: filtered,
-      metadata: { total: filtered.length },
+    treeNodes[index] = { ...treeNodes[index], ...data };
+    return serverSyncSuccess();
+  },
+  delete: (id) => {
+    // Delete node and all descendants
+    const toDelete = filter(treeNodes, (n) => n.id === id || n.id.startsWith(id + "."));
+    forEach(toDelete, (node) => {
+      const index = findIndex(treeNodes, (n) => n.id === node.id);
+      if (index !== -1) {
+        treeNodes.splice(index, 1);
+      }
     });
-  }),
+    return serverSyncSuccess();
+  },
+});
 
-  // Comments - Create
-  http.post("/api/comments", async ({ request }) => {
-    await delay(NETWORK_DELAY);
-
-    const body = (await request.json()) as Partial<(typeof comments)[0]>;
-    const newComment = {
+// Comments sync server
+const commentsServer = createSyncServer<Comment, CommentQuery>({
+  fetch: (query) => {
+    if (query.postId) {
+      return filter(comments, (c) => c.postId === query.postId);
+    }
+    return [...comments];
+  },
+  create: (data) => {
+    const newComment: Comment = {
       id: String(Date.now()),
-      postId: body.postId || "1",
-      text: body.text || "",
-      author: body.author || "Anonymous",
+      postId: data.postId || "1",
+      text: data.text || "",
+      author: data.author || "Anonymous",
       createdAt: new Date().toISOString(),
     };
-
     comments.push(newComment);
-
-    return HttpResponse.json({ id: newComment.id }, { status: 201 });
-  }),
-
-  // Comments - Update
-  http.patch("/api/comments/:id", async ({ params, request }) => {
-    await delay(NETWORK_DELAY);
-
-    const { id } = params;
-    const body = (await request.json()) as Partial<(typeof comments)[0]>;
-
-    const index = comments.findIndex((c) => c.id === id);
+    return serverSyncSuccess({ newId: newComment.id });
+  },
+  update: (id, data) => {
+    const index = findIndex(comments, (c) => c.id === id);
     if (index === -1) {
-      return HttpResponse.json({ error: "Comment not found" }, { status: 404 });
+      return serverSyncError("Comment not found");
     }
-
-    comments[index] = { ...comments[index], ...body };
-
-    return HttpResponse.json({ id });
-  }),
-
-  // Comments - Delete
-  http.delete("/api/comments/:id", async ({ params }) => {
-    await delay(NETWORK_DELAY);
-
-    const { id } = params;
-    const index = comments.findIndex((c) => c.id === id);
-
+    comments[index] = { ...comments[index], ...data };
+    return serverSyncSuccess();
+  },
+  delete: (id) => {
+    const index = findIndex(comments, (c) => c.id === id);
     if (index === -1) {
-      return HttpResponse.json({ error: "Comment not found" }, { status: 404 });
+      return serverSyncError("Comment not found");
     }
-
     comments.splice(index, 1);
+    return serverSyncSuccess();
+  },
+});
 
-    return HttpResponse.json({ id });
+// Handlers using createSyncServer
+export const handlers = [
+  // Products sync endpoint
+  http.post("/api/products/sync", async ({ request }) => {
+    await delay(NETWORK_DELAY);
+    return productsServer.handler(request);
+  }),
+
+  // Users sync endpoint
+  http.post("/api/users/sync", async ({ request }) => {
+    await delay(NETWORK_DELAY);
+    return usersServer.handler(request);
+  }),
+
+  // Comments sync endpoint
+  http.post("/api/comments/sync", async ({ request }) => {
+    await delay(NETWORK_DELAY);
+    return commentsServer.handler(request);
+  }),
+
+  // Tree sync endpoint
+  http.post("/api/tree/sync", async ({ request }) => {
+    await delay(NETWORK_DELAY);
+    return treeServer.handler(request);
   }),
 
   // Error simulation endpoint
@@ -282,49 +328,43 @@ export const handlers = [
     const errorType = url.searchParams.get("type");
 
     if (errorType === "network") {
-      return HttpResponse.error();
+      return new Response(null, { status: 0 });
     }
 
     if (errorType === "500") {
-      return HttpResponse.json({ error: "Internal server error" }, { status: 500 });
+      return new Response(JSON.stringify({ error: "Internal server error" }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      });
     }
 
     if (errorType === "timeout") {
       await delay(30000);
-      return HttpResponse.json({ items: [] });
+      return new Response(JSON.stringify({ items: [] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
     }
 
-    return HttpResponse.json({ items: [] });
-  }),
-];
-
-// Export batch sync handler for handling multiple operations
-export const batchHandlers = [
-  http.post("/api/sync", async ({ request }) => {
-    await delay(NETWORK_DELAY);
-
-    const changes = await request.json();
-
-    if (!Array.isArray(changes)) {
-      return HttpResponse.json({ error: "Invalid payload" }, { status: 400 });
-    }
-
-    const results = changes.map((change: { id: string }) => {
-      try {
-        // Simulate processing each change
-        return {
-          id: change.id,
-          status: "success" as const,
-        };
-      } catch {
-        return {
-          id: change.id,
-          status: "error" as const,
-          error: "Failed to sync",
-        };
-      }
+    return new Response(JSON.stringify({ items: [] }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
     });
-
-    return HttpResponse.json(results);
   }),
 ];
+
+// Export data for tests
+export const mockData = {
+  products,
+  users,
+  comments,
+  treeNodes,
+  getProduct: (id: string) => find(products, (p) => p.id === id),
+  getUser: (id: string) => find(users, (u) => u.id === id),
+  getComment: (id: string) => find(comments, (c) => c.id === id),
+  getTreeNode: (id: string) => find(treeNodes, (n) => n.id === id),
+  getProductsCount: () => size(products),
+  getUsersCount: () => size(users),
+  getCommentsCount: () => size(comments),
+  getTreeNodesCount: () => size(treeNodes),
+};

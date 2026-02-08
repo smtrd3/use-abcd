@@ -52,4 +52,5 @@ export type {
   SyncRequestBody,
   SyncResponseBody,
   SyncClientConfig,
+  ServerTimestamps,
 } from "./runtime";

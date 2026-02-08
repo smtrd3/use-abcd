@@ -21,7 +21,7 @@ const mockItems: TestItem[] = [
   { id: "3", name: "Item 3" },
 ];
 
-const createRequest = <T, Q>(body: SyncRequestBody<T, Q>, method = "POST"): Request => {
+const createRequest = <T extends object, Q>(body: SyncRequestBody<T, Q>, method = "POST"): Request => {
   return new Request("http://localhost/api/items", {
     method,
     headers: { "Content-Type": "application/json" },
@@ -169,7 +169,7 @@ describe("createSyncServer", () => {
       const body = await response.json();
 
       expect(response.status).toBe(200);
-      expect(body.results).toEqual(mockItems);
+      expect(body.queryResults).toEqual(mockItems);
     });
 
     it("passes query and context to fetch handler", async () => {
@@ -209,7 +209,7 @@ describe("createSyncServer", () => {
       const body = await response.json();
 
       expect(response.status).toBe(200);
-      expect(body.results).toEqual(mockItems);
+      expect(body.queryResults).toEqual(mockItems);
     });
 
     it("handles fetch handler errors gracefully", async () => {
@@ -367,7 +367,7 @@ describe("createSyncServer", () => {
       expect(body.syncResults[0]).toEqual({ id: "1", status: "success" });
       expect(updateFn).toHaveBeenCalledWith(
         "1",
-        { id: "1", name: "Updated Item" },
+        expect.objectContaining({ id: "1", name: "Updated Item", updatedAt: expect.any(Number) }),
         expect.objectContaining({ body: expect.any(Object) }),
       );
     });
@@ -419,7 +419,7 @@ describe("createSyncServer", () => {
       expect(body.syncResults[0]).toEqual({ id: "1", status: "success" });
       expect(deleteFn).toHaveBeenCalledWith(
         "1",
-        { id: "1", name: "Item 1" },
+        expect.objectContaining({ id: "1", name: "Item 1", deletedAt: expect.any(Number), updatedAt: expect.any(Number) }),
         expect.objectContaining({ body: expect.any(Object) }),
       );
     });
@@ -630,7 +630,7 @@ describe("createSyncServer", () => {
       const body = await response.json();
 
       expect(response.status).toBe(200);
-      expect(body.results).toEqual(mockItems);
+      expect(body.queryResults).toEqual(mockItems);
       expect(body.syncResults).toHaveLength(1);
       expect(body.syncResults[0].status).toBe("success");
     });
@@ -644,7 +644,7 @@ describe("createSyncServer", () => {
       const response = await handler.handler(request);
       const body = await response.json();
 
-      expect(body.results).toBeDefined();
+      expect(body.queryResults).toBeDefined();
       expect(body.syncResults).toBeUndefined();
     });
 
@@ -659,7 +659,7 @@ describe("createSyncServer", () => {
       const response = await handler.handler(request);
       const body = await response.json();
 
-      expect(body.results).toBeUndefined();
+      expect(body.queryResults).toBeUndefined();
       expect(body.syncResults).toBeDefined();
     });
   });

@@ -1,4 +1,4 @@
-export type { SyncHandlerResult, Schema, SyncRequestBody, SyncResponseBody } from "./types";
+export type { SyncHandlerResult, Schema, SyncRequestBody, SyncResponseBody, ServerTimestamps } from "./types";
 export { createSyncClient, syncSuccess, syncError, type SyncClientConfig } from "./client";
 export {
   createSyncServer,

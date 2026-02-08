@@ -1,5 +1,6 @@
-import React, { useCallback, useState, useEffect } from "react";
-import { useCrud, type Config, type SyncResult } from "../useCrud";
+import React, { useCallback } from "react";
+import { useCrud, type Config } from "../useCrud";
+import { createSyncClient } from "../runtime/client";
 
 interface User {
   id: string;
@@ -13,20 +14,17 @@ interface UserContext {
   limit: number;
 }
 
-interface PaginationMeta {
-  total: number;
-  hasMore: boolean;
+interface UserQuery {
+  page: number;
+  limit: number;
 }
 
-// Store for pagination metadata (shared across renders)
-let paginationMeta: PaginationMeta = { total: 0, hasMore: false };
-const metaListeners: Set<() => void> = new Set();
+// Create sync client using endpoint mode
+const usersSyncClient = createSyncClient<User, UserContext, UserQuery>({
+  endpoint: "/api/users/sync",
+});
 
-const notifyMetaListeners = () => {
-  metaListeners.forEach((listener) => listener());
-};
-
-const UsersConfig: Config<User, UserContext> = {
+const UsersConfig: Config<User, UserContext, UserQuery> = {
   id: "users-paginated",
   initialContext: { page: 1, limit: 5 },
   getId: (item) => item.id,
@@ -35,58 +33,12 @@ const UsersConfig: Config<User, UserContext> = {
   cacheCapacity: 10,
   cacheTtl: 60000,
 
-  onSync: async ({ changes, context, signal }) => {
-    // Fetch mode
-    if (!changes?.length) {
-      const params = new URLSearchParams({
-        page: String(context.page),
-        limit: String(context.limit),
-      });
-      const response = await fetch(`/api/users?${params}`, { signal });
-      const data = await response.json();
-      paginationMeta = { total: data.metadata.total, hasMore: data.metadata.hasMore };
-      notifyMetaListeners();
-      return { queryResults: data.items, syncResults: [] };
-    }
+  parseQuery: (ctx) => ({
+    page: ctx.page,
+    limit: ctx.limit,
+  }),
 
-    // Sync mode
-    const syncResults: SyncResult[] = [];
-    for (const change of changes) {
-      try {
-        if (change.type === "create") {
-          const res = await fetch("/api/users", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(change.data),
-            signal,
-          });
-          if (!res.ok) throw new Error("Failed to create user");
-          const data = await res.json();
-          syncResults.push({ id: change.id, status: "success", newId: data.id });
-        } else if (change.type === "update") {
-          const res = await fetch(`/api/users/${change.id}`, {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(change.data),
-            signal,
-          });
-          if (!res.ok) throw new Error("Failed to update user");
-          syncResults.push({ id: change.id, status: "success" });
-        } else if (change.type === "delete") {
-          const res = await fetch(`/api/users/${change.id}`, { method: "DELETE", signal });
-          if (!res.ok) throw new Error("Failed to delete user");
-          syncResults.push({ id: change.id, status: "success" });
-        }
-      } catch (e) {
-        syncResults.push({
-          id: change.id,
-          status: "error",
-          error: e instanceof Error ? e.message : "Unknown",
-        });
-      }
-    }
-    return { queryResults: [], syncResults };
-  },
+  onSync: usersSyncClient.onSync,
 };
 
 export const PaginatedUsers = React.memo(function PaginatedUsers() {
@@ -95,20 +47,9 @@ export const PaginatedUsers = React.memo(function PaginatedUsers() {
     UserContext
   >(UsersConfig);
 
-  const [meta, setMeta] = useState<PaginationMeta>({ total: 0, hasMore: false });
-
-  // Subscribe to pagination metadata updates
-  useEffect(() => {
-    const listener = () => setMeta({ ...paginationMeta });
-    metaListeners.add(listener);
-    // Initialize with current value
-    setMeta({ ...paginationMeta });
-    return () => {
-      metaListeners.delete(listener);
-    };
-  }, []);
-
   const users = Array.from(items.values());
+  // Simple hasMore check based on returned items count vs limit
+  const hasMore = users.length >= context.limit;
 
   const nextPage = useCallback(() => {
     setContext((draft) => {
@@ -187,7 +128,7 @@ export const PaginatedUsers = React.memo(function PaginatedUsers() {
             <option value="10">10</option>
             <option value="20">20</option>
           </select>
-          <span className="text-sm text-gray-600">({meta.total} total)</span>
+          <span className="text-sm text-gray-600">({users.length} shown)</span>
         </div>
 
         <div className="flex gap-2 items-center">
@@ -203,7 +144,7 @@ export const PaginatedUsers = React.memo(function PaginatedUsers() {
           <button
             type="button"
             onClick={nextPage}
-            disabled={!meta.hasMore || loading}
+            disabled={!hasMore || loading}
             className="bg-blue-500 text-white px-3 py-1 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-blue-600"
           >
             Next

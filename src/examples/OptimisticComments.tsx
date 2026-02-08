@@ -1,5 +1,6 @@
 import React, { useCallback, useState } from "react";
-import { useCrud, type Config, type SyncResult } from "../useCrud";
+import { useCrud, type Config } from "../useCrud";
+import { createSyncClient } from "../runtime/client";
 
 interface Comment {
   id: string;
@@ -13,7 +14,16 @@ interface CommentContext {
   postId: string;
 }
 
-const CommentsConfig: Config<Comment, CommentContext> = {
+interface CommentQuery {
+  postId: string;
+}
+
+// Create sync client using endpoint mode
+const commentsSyncClient = createSyncClient<Comment, CommentContext, CommentQuery>({
+  endpoint: "/api/comments/sync",
+});
+
+const CommentsConfig: Config<Comment, CommentContext, CommentQuery> = {
   id: "comments-optimistic",
   initialContext: { postId: "1" },
   getId: (item) => item.id,
@@ -22,56 +32,11 @@ const CommentsConfig: Config<Comment, CommentContext> = {
   cacheCapacity: 5,
   cacheTtl: 30000,
 
-  onSync: async ({ changes, context, signal }) => {
-    // Fetch mode
-    if (!changes?.length) {
-      const params = new URLSearchParams({ postId: context.postId });
-      const response = await fetch(`/api/comments?${params}`, { signal });
-      const data = await response.json();
-      return { queryResults: data.items, syncResults: [] };
-    }
+  parseQuery: (ctx) => ({
+    postId: ctx.postId,
+  }),
 
-    // Sync mode
-    const syncResults: SyncResult[] = [];
-    for (const change of changes) {
-      try {
-        if (change.type === "create") {
-          const response = await fetch("/api/comments", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(change.data),
-            signal,
-          });
-          if (!response.ok) throw new Error("Failed to create comment");
-          const data = await response.json();
-          syncResults.push({ id: change.id, status: "success", newId: data.id });
-        } else if (change.type === "update") {
-          const response = await fetch(`/api/comments/${change.id}`, {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(change.data),
-            signal,
-          });
-          if (!response.ok) throw new Error("Failed to update comment");
-          syncResults.push({ id: change.id, status: "success" });
-        } else if (change.type === "delete") {
-          const response = await fetch(`/api/comments/${change.id}`, {
-            method: "DELETE",
-            signal,
-          });
-          if (!response.ok) throw new Error("Failed to delete comment");
-          syncResults.push({ id: change.id, status: "success" });
-        }
-      } catch (error) {
-        syncResults.push({
-          id: change.id,
-          status: "error",
-          error: error instanceof Error ? error.message : "Unknown error",
-        });
-      }
-    }
-    return { queryResults: [], syncResults };
-  },
+  onSync: commentsSyncClient.onSync,
 };
 
 export const OptimisticComments = React.memo(function OptimisticComments() {

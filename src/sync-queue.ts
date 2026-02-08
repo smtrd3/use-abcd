@@ -16,7 +16,7 @@ import {
 } from "lodash-es";
 import type { Change, SyncQueueState, SyncResult, IdMapping } from "./types";
 
-export type SyncQueueConfig<T, C = unknown> = {
+export type SyncQueueConfig<T extends object, C = unknown> = {
   debounce: number;
   maxRetries: number;
   batchSize?: number;
@@ -42,7 +42,7 @@ export type SyncQueueConfig<T, C = unknown> = {
  *
  * @returns Combined operations array, or null if operations cancel out
  */
-const coalesce = <T>(ops: Change<T>[], next: Change<T>): Change<T>[] | null => {
+const coalesce = <T extends object>(ops: Change<T>[], next: Change<T>): Change<T>[] | null => {
   if (isEmpty(ops)) return [next];
 
   const prev = last(ops)!;
@@ -69,7 +69,7 @@ const coalesce = <T>(ops: Change<T>[], next: Change<T>): Change<T>[] | null => {
   return [next];
 };
 
-export class SyncQueue<T, C = unknown> {
+export class SyncQueue<T extends object, C = unknown> {
   private _config: SyncQueueConfig<T, C>;
   private _state: SyncQueueState<T>;
   private _subscribers = new Set<() => void>();

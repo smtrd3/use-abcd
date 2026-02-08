@@ -1,9 +1,10 @@
+import { map, isEmpty, isUndefined, get } from "lodash-es";
 import type { Change, SyncResult, OnSyncParams, OnSyncResult } from "../types";
 import type { SyncHandlerResult, SyncRequestBody, SyncResponseBody } from "./types";
 
 export type { SyncHandlerResult };
 
-export type SyncClientConfig<T, Q = unknown> = {
+export type SyncClientConfig<T extends object, Q = unknown> = {
   endpoint?: string;
   headers?: Record<string, string>;
   fetch?: (query: Q, signal: AbortSignal) => Promise<T[]>;
@@ -18,7 +19,7 @@ export const syncSuccess = (opts?: { newId?: string }): SyncHandlerResult => ({
 });
 export const syncError = (error: string): SyncHandlerResult => ({ success: false, error });
 
-async function processChange<T>(
+async function processChange<T extends object>(
   change: Change<T>,
   config: SyncClientConfig<T>,
   signal: AbortSignal,
@@ -54,14 +55,14 @@ async function processChange<T>(
   }
 }
 
-async function endpointSync<T, C, Q>(
+async function endpointSync<T extends object, C, Q, S>(
   endpoint: string,
   headers: Record<string, string>,
   params: OnSyncParams<T, C, Q>,
-): Promise<OnSyncResult<T>> {
+): Promise<OnSyncResult<T, S>> {
   const { changes, query, signal } = params;
-  const hasQuery = query !== undefined;
-  const hasChanges = changes && changes.length > 0;
+  const hasQuery = !isUndefined(query);
+  const hasChanges = !isEmpty(changes);
 
   // Build request body with both query and changes if present
   const body: SyncRequestBody<T, Q> = {};
@@ -79,24 +80,25 @@ async function endpointSync<T, C, Q>(
     if (!res.ok) {
       const errMsg = await res
         .json()
-        .then((b) => b.error)
+        .then((b) => get(b, "error"))
         .catch(() => "Request failed");
       // If only fetching (no changes), throw error
       if (!hasChanges) throw new Error(errMsg);
       return {
         queryResults: [],
-        syncResults: changes.map((c) => ({ id: c.id, status: "error", error: errMsg })),
+        syncResults: map(changes, (c) => ({ id: c.id, status: "error" as const, error: errMsg })),
       };
     }
 
-    const data: SyncResponseBody<T> = await res.json();
+    const data: SyncResponseBody<T, S> = await res.json();
     return {
-      queryResults: data.results ?? [],
+      queryResults: get(data, "queryResults", []),
       syncResults:
-        data.syncResults ??
+        get(data, "syncResults") ??
         (hasChanges
-          ? changes.map((c) => ({ id: c.id, status: "error", error: "No results" }))
+          ? map(changes, (c) => ({ id: c.id, status: "error" as const, error: "No results" }))
           : []),
+      serverState: data.serverState,
     };
   } catch (e) {
     const err = e instanceof Error ? e.message : "Unknown error";
@@ -104,20 +106,20 @@ async function endpointSync<T, C, Q>(
     if (!hasChanges) throw new Error(err);
     return {
       queryResults: [],
-      syncResults: changes.map((c) => ({ id: c.id, status: "error", error: err })),
+      syncResults: map(changes, (c) => ({ id: c.id, status: "error" as const, error: err })),
     };
   }
 }
 
-export function createSyncClient<T, C = unknown, Q = unknown>(
+export function createSyncClient<T extends object, C = unknown, Q = unknown, S = unknown>(
   config: SyncClientConfig<T, Q>,
 ): {
-  onSync: (params: OnSyncParams<T, C, Q>) => Promise<OnSyncResult<T>>;
+  onSync: (params: OnSyncParams<T, C, Q>) => Promise<OnSyncResult<T, S>>;
 } {
-  const onSync = async (params: OnSyncParams<T, C, Q>): Promise<OnSyncResult<T>> => {
+  const onSync = async (params: OnSyncParams<T, C, Q>): Promise<OnSyncResult<T, S>> => {
     const { changes, query, signal } = params;
-    const hasQuery = query !== undefined;
-    const hasChanges = changes && changes.length > 0;
+    const hasQuery = !isUndefined(query);
+    const hasChanges = !isEmpty(changes);
 
     // Warn and return empty results if neither query nor changes provided
     if (!hasQuery && !hasChanges) {
@@ -127,13 +129,13 @@ export function createSyncClient<T, C = unknown, Q = unknown>(
 
     // Endpoint mode - handles both query and changes together
     if (config.endpoint) {
-      return endpointSync<T, C, Q>(config.endpoint, config.headers ?? {}, params);
+      return endpointSync<T, C, Q, S>(config.endpoint, config.headers ?? {}, params);
     }
 
     // Handler mode - process query and changes independently
     const queryResults = hasQuery && config.fetch ? await config.fetch(query as Q, signal) : [];
     const syncResults = hasChanges
-      ? await Promise.all(changes.map((c) => processChange(c, config, signal)))
+      ? await Promise.all(map(changes, (c) => processChange(c, config, signal)))
       : [];
 
     return { queryResults, syncResults };

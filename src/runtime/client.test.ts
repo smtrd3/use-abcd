@@ -214,7 +214,7 @@ describe("Client Sync Utilities", () => {
     it("fetches data when no changes provided", async () => {
       const items = [{ id: "1", name: "Item 1" }];
       mockFetch.mockResolvedValue(
-        new Response(JSON.stringify({ results: items }), { status: 200 }),
+        new Response(JSON.stringify({ queryResults: items }), { status: 200 }),
       );
 
       const { onSync } = createSyncClient<TestItem>({ endpoint: "/api/sync" });
@@ -267,7 +267,9 @@ describe("Client Sync Utilities", () => {
     });
 
     it("accepts custom headers", async () => {
-      mockFetch.mockResolvedValue(new Response(JSON.stringify({ results: [] }), { status: 200 }));
+      mockFetch.mockResolvedValue(
+        new Response(JSON.stringify({ queryResults: [] }), { status: 200 }),
+      );
 
       const { onSync } = createSyncClient<TestItem>({
         endpoint: "/api/sync",

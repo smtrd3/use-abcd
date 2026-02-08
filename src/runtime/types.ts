@@ -10,12 +10,20 @@ export type Schema<T> = {
   ) => { success: true; data: T } | { success: false; error: { message: string } };
 };
 
-export type SyncRequestBody<T, Q = unknown> = {
+export type SyncRequestBody<T extends object, Q = unknown> = {
   query?: Q;
   changes?: Change<T>[];
 };
 
-export type SyncResponseBody<T> = {
-  results?: T[];
+export type SyncResponseBody<T extends object, S = unknown> = {
+  queryResults?: T[];
   syncResults?: SyncResult[];
+  serverState?: S; // Optional server state (e.g., pagination: totalItems, nextCursor, etc.)
+};
+
+// Server-side timestamps auto-stamped by createSyncServer on create/update/delete handlers
+export type ServerTimestamps = {
+  createdAt: number;
+  updatedAt: number;
+  deletedAt?: number | null;
 };

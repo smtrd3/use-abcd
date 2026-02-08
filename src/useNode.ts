@@ -1,4 +1,4 @@
-import { useSyncExternalStore, useCallback, useRef } from "react";
+import { useSyncExternalStore, useCallback, useRef, useMemo } from "react";
 import { isEqual, size } from "lodash-es";
 import type { Draft } from "mutative";
 import type { Node, TreeNode } from "./node";
@@ -100,22 +100,41 @@ export function useNode<T extends object, C, NodeType = string>(
   const select = useCallback(() => node.select(), [node]);
   const deselect = useCallback(() => node.collection.deselectNode(), [node]);
 
-  return {
-    isPresent: true,
-    data: snapshot.data,
-    status: snapshot.status,
-    exists: snapshot.exists,
-    isSelected: snapshot.isSelected,
-    depth: node.depth,
-    getParent,
-    children: snapshot.children,
-    append,
-    prepend,
-    move,
-    clone,
-    updateProp,
-    remove,
-    select,
-    deselect,
-  };
+  return useMemo(
+    () => ({
+      isPresent: true,
+      data: snapshot.data,
+      status: snapshot.status,
+      exists: snapshot.exists,
+      isSelected: snapshot.isSelected,
+      depth: node.depth,
+      getParent,
+      children: snapshot.children,
+      append,
+      prepend,
+      move,
+      clone,
+      updateProp,
+      remove,
+      select,
+      deselect,
+    }),
+    [
+      snapshot.data,
+      snapshot.status,
+      snapshot.exists,
+      snapshot.isSelected,
+      snapshot.children,
+      node.depth,
+      getParent,
+      append,
+      prepend,
+      move,
+      clone,
+      updateProp,
+      remove,
+      select,
+      deselect,
+    ],
+  );
 }

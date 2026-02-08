@@ -2,7 +2,8 @@ import React, { useCallback, useState } from "react";
 import { useCrudTree, type TreeConfig } from "../useCrudTree";
 import { useNode } from "../useNode";
 import { useSelectedNode } from "../useSelectedNode";
-import type { TreeNode, Node } from "../node";
+import { createSyncClient } from "../runtime/client";
+import type { Node } from "../node";
 
 interface FileData {
   name: string;
@@ -13,49 +14,23 @@ type FileContext = Record<string, never>;
 
 const TREE_ID = "file-tree";
 
-// Initial tree data simulating a file system
-const initialTreeData: TreeNode<FileData>[] = [
-  { id: "root", position: 0, value: { name: "Project" }, type: "object" },
-  { id: "root.src", position: 0, value: { name: "src" }, type: "object" },
-  {
-    id: "root.src.index",
-    position: 0,
-    value: { name: "index.ts", content: 'console.log("Hello World");' },
-    type: "primitive",
-  },
-  {
-    id: "root.src.utils",
-    position: 1,
-    value: {
-      name: "utils.ts",
-      content: "export function add(a: number, b: number) {\n  return a + b;\n}",
-    },
-    type: "primitive",
-  },
-  { id: "root.docs", position: 1, value: { name: "docs" }, type: "object" },
-  {
-    id: "root.docs.readme",
-    position: 0,
-    value: { name: "README.md", content: "# My Project\n\nThis is a demo project." },
-    type: "primitive",
-  },
-  {
-    id: "root.package",
-    position: 2,
-    value: { name: "package.json", content: '{\n  "name": "my-project",\n  "version": "1.0.0"\n}' },
-    type: "primitive",
-  },
-];
+// Create sync client for tree
+const treeSyncClient = createSyncClient<
+  { id: string; position: number; value: FileData; type: string },
+  FileContext
+>({
+  endpoint: "/api/tree/sync",
+});
 
 let nodeCounter = 0;
 
-const TreeConfig: TreeConfig<FileData, FileContext> = {
+const fileTreeConfig: TreeConfig<FileData, FileContext> = {
   id: TREE_ID,
   initialContext: {},
   getId: (item) => item.id,
   rootId: "root",
   getNodeId: () => `node-${++nodeCounter}`,
-  onSync: async () => ({ queryResults: initialTreeData, syncResults: [] }),
+  onSync: treeSyncClient.onSync,
 };
 
 // Recursive tree node component
@@ -234,7 +209,7 @@ function EditPanel() {
 }
 
 export const TreeEditor = React.memo(function TreeEditor() {
-  const { loading, rootNode } = useCrudTree<FileData, FileContext>(TreeConfig);
+  const { loading, rootNode } = useCrudTree<FileData, FileContext>(fileTreeConfig);
 
   return (
     <div className="max-w-5xl mx-auto">

@@ -1,5 +1,5 @@
 import { create, type Draft } from "mutative";
-import { last, get } from "lodash-es";
+import { last, get, map } from "lodash-es";
 import { SyncQueue } from "./sync-queue";
 import { FetchHandler } from "./fetch-handler";
 import { Item } from "./item";
@@ -15,9 +15,10 @@ import type {
   OnSyncResult,
 } from "./types";
 
-export type CollectionState<T, C> = {
+export type CollectionState<T extends object, C, S = unknown> = {
   context: C;
   items: Map<string, T>;
+  serverState?: S;
   syncState: SyncState;
   loading: boolean;
   syncing: boolean;
@@ -26,18 +27,20 @@ export type CollectionState<T, C> = {
   fetchError?: string;
 };
 
-export class Collection<T extends object, C, Q = unknown> {
+export class Collection<T extends object, C, Q = unknown, S = unknown> {
   // Global cache of collection instances by id
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private static _cache = new Map<string, Collection<any, any, any>>();
+  private static _cache = new Map<string, Collection<any, any, any, any>>();
 
   // Get or create a collection instance
-  static get<T extends object, C, Q = unknown>(config: Config<T, C, Q>): Collection<T, C, Q> {
+  static get<T extends object, C, Q = unknown, S = unknown>(
+    config: Config<T, C, Q>,
+  ): Collection<T, C, Q, S> {
     const existing = Collection._cache.get(config.id);
     if (existing) {
-      return existing as Collection<T, C, Q>;
+      return existing as Collection<T, C, Q, S>;
     }
-    const collection = new Collection(config);
+    const collection = new Collection<T, C, Q, S>(config);
     Collection._cache.set(config.id, collection);
     return collection;
   }
@@ -53,16 +56,18 @@ export class Collection<T extends object, C, Q = unknown> {
   }
 
   // Get existing collection by ID (returns undefined if not found)
-  static getById<T extends object, C, Q = unknown>(id: string): Collection<T, C, Q> | undefined {
-    return Collection._cache.get(id) as Collection<T, C, Q> | undefined;
+  static getById<T extends object, C, Q = unknown, S = unknown>(
+    id: string,
+  ): Collection<T, C, Q, S> | undefined {
+    return Collection._cache.get(id) as Collection<T, C, Q, S> | undefined;
   }
 
   readonly id: string;
   readonly config: Config<T, C, Q>;
 
-  private _state: CollectionState<T, C>;
+  private _state: CollectionState<T, C, S>;
   private _syncQueue: SyncQueue<T, C>;
-  private _fetchHandler: FetchHandler<T, C, Q>;
+  private _fetchHandler: FetchHandler<T, C, Q, S>;
   private _itemCache: WeakMap<T & object, Item<T, C>> = new WeakMap();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private _nodeCache: WeakMap<TreeNode<any, any> & object, Node<any, C, any>> = new WeakMap();
@@ -77,11 +82,19 @@ export class Collection<T extends object, C, Q = unknown> {
 
     const parseQuery = config.parseQuery ?? ((ctx: C) => ctx as unknown as Q);
 
-    // Default no-op sync handler for offline-first mode
-    const defaultOnSync = async (): Promise<OnSyncResult<T>> => ({
+    // Default sync handler for offline-first mode - returns success for all changes
+    const defaultOnSync = async ({
+      changes,
+    }: {
+      changes?: { id: string }[];
+      query?: Q;
+      context?: C;
+      signal?: AbortSignal;
+    }): Promise<OnSyncResult<T>> => ({
       queryResults: [],
-      syncResults: [],
+      syncResults: map(changes ?? [], (c) => ({ id: c.id, status: "success" as const })),
     });
+
     const onSync = config.onSync ?? defaultOnSync;
 
     // Initialize SyncQueue with adapter
@@ -97,7 +110,7 @@ export class Collection<T extends object, C, Q = unknown> {
     });
 
     // Initialize FetchHandler with adapter
-    this._fetchHandler = new FetchHandler<T, C, Q>({
+    this._fetchHandler = new FetchHandler<T, C, Q, S>({
       id: config.id,
       cacheCapacity: config.cacheCapacity ?? 10,
       cacheTtl: config.cacheTtl ?? 60000,
@@ -105,7 +118,7 @@ export class Collection<T extends object, C, Q = unknown> {
       parseQuery,
       onFetch: async (query, context, signal) => {
         const result = await onSync({ query, context, signal });
-        return result.queryResults;
+        return { items: result.queryResults, serverState: result.serverState as S | undefined };
       },
     });
 
@@ -158,6 +171,10 @@ export class Collection<T extends object, C, Q = unknown> {
     return this._state.syncQueue;
   }
 
+  get serverState(): S | undefined {
+    return this._state.serverState;
+  }
+
   // Subscribe to state changes
   subscribe(callback: () => void): () => void {
     this._subscribers.add(callback);
@@ -167,7 +184,7 @@ export class Collection<T extends object, C, Q = unknown> {
   }
 
   // Get current state (for useSyncExternalStore) - returns cached reference
-  getState(): CollectionState<T, C> {
+  getState(): CollectionState<T, C, S> {
     return this._state;
   }
 
@@ -212,6 +229,12 @@ export class Collection<T extends object, C, Q = unknown> {
     return null;
   }
 
+  // Check if enqueue is enabled based on current context
+  private _shouldEnqueue(): boolean {
+    const { enableEnqueue } = this.config;
+    return enableEnqueue ? enableEnqueue(this._state.context) : true;
+  }
+
   // Create a new item (local-first)
   create(item: T): void {
     const id = this.config.getId(item);
@@ -222,7 +245,10 @@ export class Collection<T extends object, C, Q = unknown> {
 
     this._fetchHandler.invalidateCache();
     this._notifySubscribers();
-    this._syncQueue.enqueue({ id, type: "create", data: item });
+
+    if (this._shouldEnqueue()) {
+      this._syncQueue.enqueue({ id, type: "create", data: item });
+    }
   }
 
   // Update an existing item (local-first)
@@ -230,7 +256,9 @@ export class Collection<T extends object, C, Q = unknown> {
     const currentItem = this._state.items.get(id);
     if (!currentItem) return;
 
-    const newItem = create(currentItem, mutate);
+    const newItem = create(currentItem, (draft) => {
+      mutate(draft);
+    });
 
     this._state = create(this._state, (draft) => {
       draft.items.set(id, newItem as Draft<T>);
@@ -238,7 +266,10 @@ export class Collection<T extends object, C, Q = unknown> {
 
     this._fetchHandler.invalidateCache();
     this._notifySubscribers();
-    this._syncQueue.enqueue({ id, type: "update", data: newItem });
+
+    if (this._shouldEnqueue()) {
+      this._syncQueue.enqueue({ id, type: "update", data: newItem });
+    }
   }
 
   // Remove an item (local-first)
@@ -254,7 +285,9 @@ export class Collection<T extends object, C, Q = unknown> {
     this._fetchHandler.invalidateCache();
     this._notifySubscribers();
 
-    this._syncQueue.enqueue({ id, type: "delete", data: item });
+    if (this._shouldEnqueue()) {
+      this._syncQueue.enqueue({ id, type: "delete", data: item });
+    }
   }
 
   // Get Item reference (cached by data object)
@@ -394,6 +427,7 @@ export class Collection<T extends object, C, Q = unknown> {
     this._state = create(this._state, (draft) => {
       draft.fetchStatus = fetchState.status;
       draft.fetchError = fetchState.error;
+      draft.serverState = fetchState.serverState as Draft<S>;
       draft.loading = fetchState.status === "fetching";
       draft.syncState = this._computeSyncState(fetchState.status, draft.syncQueue.isSyncing);
 

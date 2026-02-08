@@ -1,6 +1,7 @@
 import React, { useCallback, useState } from "react";
-import { useCrud, type Config, type SyncResult } from "../useCrud";
+import { useCrud, type Config } from "../useCrud";
 import { useItem } from "../useItem";
+import { createSyncClient } from "../runtime/client";
 
 interface Product {
   id: string;
@@ -18,11 +19,16 @@ interface ProductContext {
 }
 
 interface ProductQuery {
-  page: string;
-  limit: string;
+  page: number;
+  limit: number;
   category?: string;
   search?: string;
 }
+
+// Create sync client using endpoint mode
+const productsSyncClient = createSyncClient<Product, ProductContext, ProductQuery>({
+  endpoint: "/api/products/sync",
+});
 
 const ProductsConfig: Config<Product, ProductContext, ProductQuery> = {
   id: "products",
@@ -34,65 +40,13 @@ const ProductsConfig: Config<Product, ProductContext, ProductQuery> = {
   cacheTtl: 30000,
 
   parseQuery: (ctx) => ({
-    page: String(ctx.page),
-    limit: String(ctx.limit),
+    page: ctx.page,
+    limit: ctx.limit,
     category: ctx.category,
     search: ctx.search,
   }),
 
-  onSync: async ({ changes, query, signal }) => {
-    // Fetch mode - no changes
-    if (!changes?.length) {
-      const params = new URLSearchParams({ page: query.page, limit: query.limit });
-      if (query.category) params.append("category", query.category);
-      if (query.search) params.append("search", query.search);
-
-      const response = await fetch(`/api/products?${params}`, { signal });
-      const data = await response.json();
-      return { queryResults: data.items, syncResults: [] };
-    }
-
-    // Sync mode - process changes
-    const syncResults: SyncResult[] = [];
-    for (const change of changes) {
-      try {
-        if (change.type === "create") {
-          const response = await fetch("/api/products", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(change.data),
-            signal,
-          });
-          if (!response.ok) throw new Error("Failed to create product");
-          const data = await response.json();
-          syncResults.push({ id: change.id, status: "success", newId: data.id });
-        } else if (change.type === "update") {
-          const response = await fetch(`/api/products/${change.id}`, {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(change.data),
-            signal,
-          });
-          if (!response.ok) throw new Error("Failed to update product");
-          syncResults.push({ id: change.id, status: "success" });
-        } else if (change.type === "delete") {
-          const response = await fetch(`/api/products/${change.id}`, {
-            method: "DELETE",
-            signal,
-          });
-          if (!response.ok) throw new Error("Failed to delete product");
-          syncResults.push({ id: change.id, status: "success" });
-        }
-      } catch (error) {
-        syncResults.push({
-          id: change.id,
-          status: "error",
-          error: error instanceof Error ? error.message : "Unknown error",
-        });
-      }
-    }
-    return { queryResults: [], syncResults };
-  },
+  onSync: productsSyncClient.onSync,
 };
 
 const ProductItem = React.memo(function ProductItem({ productId }: { productId: string }) {

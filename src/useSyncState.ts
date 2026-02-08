@@ -2,7 +2,7 @@ import { useSyncExternalStore } from "react";
 import { Collection } from "./collection";
 import type { SyncState, Change, SyncError } from "./types";
 
-export type UseSyncStateResult<T = unknown> = {
+export type UseSyncStateResult<T extends object = object> = {
   syncState: SyncState;
   syncing: boolean;
   queue: Map<string, Change<T>[]>;
@@ -21,7 +21,7 @@ export type UseSyncStateResult<T = unknown> = {
  * @param collectionId - The ID of the collection
  * @returns Flat object with syncState and all syncQueue properties
  */
-export function useSyncState<T = unknown>(collectionId: string): UseSyncStateResult<T> {
+export function useSyncState<T extends object = object>(collectionId: string): UseSyncStateResult<T> {
   const collection = Collection.getById(collectionId);
   if (!collection) {
     throw new Error(

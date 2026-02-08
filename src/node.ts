@@ -205,12 +205,10 @@ export class Node<T extends object, C = unknown, NodeType = string> {
     const cloneRootId = getNodeId ? getNodeId() : uniqueId();
     const result = new Map<string, TreeNode<T, NodeType>>();
 
-    // Clone self
+    // Clone self - spread from existing to preserve timestamps
     result.set(cloneRootId, {
+      ...nodeData,
       id: cloneRootId,
-      position: nodeData.position,
-      value: nodeData.value,
-      type: nodeData.type,
     });
 
     // Clone all descendants with remapped IDs
@@ -225,10 +223,8 @@ export class Node<T extends object, C = unknown, NodeType = string> {
 
       const treeData = data as TreeNode<T, NodeType>;
       result.set(newId, {
+        ...treeData,
         id: newId,
-        position: treeData.position,
-        value: treeData.value,
-        type: treeData.type,
       });
     });
 
@@ -283,13 +279,12 @@ export class Node<T extends object, C = unknown, NodeType = string> {
         newId = join([newRootId, suffix.slice(this._separator.length)], this._separator);
       }
 
-      const newNode: TreeNode<T, NodeType> = {
+      // Spread from cloneData to preserve timestamps, override id and position
+      this._collection.create({
+        ...cloneData,
         id: newId,
         position: cloneId === cloneRootKey ? targetPosition : cloneData.position,
-        value: cloneData.value,
-        type: cloneData.type,
-      };
-      this._collection.create(newNode);
+      });
     });
 
     return newRootId;

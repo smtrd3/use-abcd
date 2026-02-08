@@ -61,7 +61,7 @@ describe("FetchHandler", () => {
 
         const response = await fetch(`/api/items?${params}`, { signal });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        return response.json();
+        return { items: await response.json() };
       },
       ...overrides,
     });
@@ -670,7 +670,7 @@ describe("FetchHandler", () => {
         cacheTtl: 5000,
         onFetch: async () => {
           fetchCount1++;
-          return mockItems;
+          return { items: mockItems };
         },
       });
 
@@ -680,7 +680,7 @@ describe("FetchHandler", () => {
         cacheTtl: 5000,
         onFetch: async () => {
           fetchCount2++;
-          return mockItems;
+          return { items: mockItems };
         },
       });
 
