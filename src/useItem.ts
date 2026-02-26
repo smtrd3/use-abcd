@@ -11,7 +11,7 @@ export type UseItemResult<T> = {
   exists: boolean;
 };
 
-export function useItem<T extends object, C>(item: Item<T, C>): UseItemResult<T> {
+export function useItem<T extends { id: string }, C>(item: Item<T, C>): UseItemResult<T> {
   // Note: Item cache is now managed by Collection.setContext()
   // Cache is automatically cleared when context changes
 

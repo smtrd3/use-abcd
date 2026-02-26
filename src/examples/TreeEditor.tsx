@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import { useCrudTree, type TreeConfig } from "../useCrudTree";
 import { useNode } from "../useNode";
 import { useSelectedNode } from "../useSelectedNode";
@@ -52,10 +52,9 @@ let nodeCounter = 0;
 const TreeConfig: TreeConfig<FileData, FileContext> = {
   id: TREE_ID,
   initialContext: {},
-  getId: (item) => item.id,
   rootId: "root",
   getNodeId: () => `node-${++nodeCounter}`,
-  onFetch: async () => initialTreeData,
+  handler: async () => ({ results: initialTreeData }),
 };
 
 // Recursive tree node component
@@ -67,6 +66,14 @@ const TreeNodeItem = React.memo(function TreeNodeItem({
   depth?: number;
 }) {
   const { data, isSelected, select, children } = useNode<FileData, FileContext>(node);
+
+  const renderedChildren = useMemo(
+    () =>
+      children.map((child) => (
+        <TreeNodeItem key={child.id} node={child} depth={depth + 1} />
+      )),
+    [children, depth],
+  );
 
   if (!data) return null;
 
@@ -85,23 +92,15 @@ const TreeNodeItem = React.memo(function TreeNodeItem({
         <span className="text-gray-500">{isFolder ? "📁" : "📄"}</span>
         <span className={isFolder ? "font-medium" : ""}>{data.value.name}</span>
       </div>
-      {isFolder && children.length > 0 && (
-        <div>
-          {children.map((child) => (
-            <TreeNodeItem key={child.id} node={child} depth={depth + 1} />
-          ))}
-        </div>
-      )}
+      {isFolder && children.length > 0 && <div>{renderedChildren}</div>}
     </div>
   );
 });
 
 // Edit panel component using useSelectedNode
-function EditPanel() {
-  const { isPresent, data, depth, updateProp, append, remove, deselect } = useSelectedNode<
-    FileData,
-    FileContext
-  >(TREE_ID);
+const EditPanel = React.memo(function EditPanel() {
+  const { isPresent, data, depth, updateProp, append, remove, deselect, moveUp, moveDown } =
+    useSelectedNode<FileData, FileContext>(TREE_ID);
   const [editedName, setEditedName] = useState("");
   const [editedContent, setEditedContent] = useState("");
   const [newItemName, setNewItemName] = useState("");
@@ -197,6 +196,26 @@ function EditPanel() {
             </button>
           )}
         </div>
+
+        {!isRoot && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Reorder</label>
+            <div className="flex gap-2">
+              <button
+                onClick={moveUp}
+                className="border border-gray-300 text-gray-700 px-4 py-2 rounded hover:bg-gray-100"
+              >
+                Move Up
+              </button>
+              <button
+                onClick={moveDown}
+                className="border border-gray-300 text-gray-700 px-4 py-2 rounded hover:bg-gray-100"
+              >
+                Move Down
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {isFolder && (
@@ -231,7 +250,7 @@ function EditPanel() {
       </div>
     </div>
   );
-}
+});
 
 export const TreeEditor = React.memo(function TreeEditor() {
   const { loading, rootNode } = useCrudTree<FileData, FileContext>(TreeConfig);

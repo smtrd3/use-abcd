@@ -1,6 +1,6 @@
-import { useSyncExternalStore, useCallback } from "react";
+import { useSyncExternalStore, useCallback, useMemo } from "react";
 import { sortBy, map, filter } from "lodash-es";
-import { Collection } from "./collection";
+import { Collection, buildServerSnapshot } from "./collection";
 import type { Node, TreeNode } from "./node";
 import type { Config, Mutator } from "./types";
 
@@ -26,12 +26,15 @@ export type TreeConfig<T extends object, C, NodeType = string> = Omit<
 export function useCrudTree<T extends object, C, NodeType = string>(
   config: TreeConfig<T, C, NodeType>,
 ) {
-  const collection = Collection.get(config as Config<TreeNode<T, NodeType>, C>);
+  const fullConfig = config as Config<TreeNode<T, NodeType>, C>;
+  const collection = Collection.get(fullConfig);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const serverSnapshot = useMemo(() => buildServerSnapshot(fullConfig), [config.id]);
 
   const state = useSyncExternalStore(
     (callback) => collection.subscribe(callback),
     () => collection.getState(),
-    () => collection.getState(),
+    () => serverSnapshot,
   );
 
   const rootNode = useSyncExternalStore(
@@ -42,24 +45,19 @@ export function useCrudTree<T extends object, C, NodeType = string>(
         ? (collection.getNode<T, NodeType>(config.rootId) as Node<T, C, NodeType>)
         : null;
     },
-    () => {
-      const rootData = collection.items.get(config.rootId);
-      return rootData
-        ? (collection.getNode<T, NodeType>(config.rootId) as Node<T, C, NodeType>)
-        : null;
-    },
+    () => null,
   );
 
   const selectedNodeId = useSyncExternalStore(
     (cb) => collection.subscribe(cb),
     () => collection.selectedNodeId,
-    () => collection.selectedNodeId,
+    () => null,
   );
 
   const selectedNode = useSyncExternalStore(
     (cb) => collection.subscribe(cb),
     () => collection.selectedNode as Node<T, C, NodeType> | null,
-    () => collection.selectedNode as Node<T, C, NodeType> | null,
+    () => null,
   );
 
   const toJson = useCallback(() => {

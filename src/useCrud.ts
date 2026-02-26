@@ -1,13 +1,14 @@
-import { useSyncExternalStore } from "react";
+import { useMemo, useSyncExternalStore } from "react";
 import type { Draft } from "mutative";
-import { Collection } from "./collection";
+import { ulid } from "ulid";
+import { Collection, buildServerSnapshot } from "./collection";
 import type { Config, Mutator } from "./types";
 
-// Re-export types for public use
 export type {
   Config,
+  CrudHandler,
   Change,
-  SyncResult,
+  Result,
   ItemStatus,
   SyncQueueState,
   SyncState,
@@ -16,17 +17,19 @@ export type {
   FetchState,
 } from "./types";
 
-export function useCrud<T extends object, C>(config: Config<T, C>) {
+export function useCrud<T extends { id: string }, C>(config: Config<T, C>) {
   const collection = Collection.get(config);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const serverSnapshot = useMemo(() => buildServerSnapshot(config), [config.id]);
 
   const state = useSyncExternalStore(
     (callback) => collection.subscribe(callback),
     () => collection.getState(),
-    () => collection.getState(),
+    () => serverSnapshot,
   );
 
   return {
-    // State (all from single immutable state object)
+    // State
     items: state.items,
     context: state.context,
     syncState: state.syncState,
@@ -37,7 +40,7 @@ export function useCrud<T extends object, C>(config: Config<T, C>) {
     fetchError: state.fetchError,
 
     // Item operations
-    create: (item: T) => collection.create(item),
+    create: (item: Omit<T, "id">) => collection.create({ ...item, id: ulid() } as T),
     update: (id: string, mutate: (draft: Draft<T>) => void) => collection.update(id, mutate),
     remove: (id: string) => collection.remove(id),
     getItem: (id: string) => collection.getItem(id),

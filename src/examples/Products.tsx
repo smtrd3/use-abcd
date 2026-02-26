@@ -1,5 +1,6 @@
 import React, { useCallback, useState } from "react";
-import { useCrud, type Config, type SyncResult } from "../useCrud";
+import { useCrud, type Config } from "../useCrud";
+import { createSyncClient } from "../runtime/client";
 import { useItem } from "../useItem";
 import type { Item } from "../item";
 
@@ -24,94 +25,11 @@ const ProductsConfig: Config<Product, ProductContext> = {
     page: 1,
     limit: 10,
   },
-  getId: (item) => item.id,
-
-  // Sync configuration
   syncDebounce: 500,
   syncRetries: 3,
-
-  // Cache configuration
   cacheCapacity: 5,
-  cacheTtl: 30000, // 30 seconds
-
-  // Fetch products with pagination and filtering
-  onFetch: async (context, signal) => {
-    const params = new URLSearchParams({
-      page: String(context.page),
-      limit: String(context.limit),
-    });
-
-    if (context.category) {
-      params.append("category", context.category);
-    }
-
-    if (context.search) {
-      params.append("search", context.search);
-    }
-
-    const response = await fetch(`/api/products?${params}`, { signal });
-    const data = await response.json();
-
-    return data.items;
-  },
-
-  // Sync changes (batch operation)
-  onSync: async (changes, _context, signal) => {
-    const results: SyncResult[] = [];
-
-    for (const change of changes) {
-      try {
-        if (change.type === "create") {
-          const response = await fetch("/api/products", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(change.data),
-            signal,
-          });
-
-          if (!response.ok) {
-            throw new Error("Failed to create product");
-          }
-
-          const data = await response.json();
-          // Return newId so the library can remap the temporary ID to the server-assigned ID
-          results.push({ id: change.id, status: "success", newId: data.id });
-        } else if (change.type === "update") {
-          const response = await fetch(`/api/products/${change.id}`, {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(change.data),
-            signal,
-          });
-
-          if (!response.ok) {
-            throw new Error("Failed to update product");
-          }
-
-          results.push({ id: change.id, status: "success" });
-        } else if (change.type === "delete") {
-          const response = await fetch(`/api/products/${change.id}`, {
-            method: "DELETE",
-            signal,
-          });
-
-          if (!response.ok) {
-            throw new Error("Failed to delete product");
-          }
-
-          results.push({ id: change.id, status: "success" });
-        }
-      } catch (error) {
-        results.push({
-          id: change.id,
-          status: "error",
-          error: error instanceof Error ? error.message : "Unknown error",
-        });
-      }
-    }
-
-    return results;
-  },
+  cacheTtl: 30000,
+  handler: createSyncClient<Product, ProductContext>("/api/products"),
 };
 
 const ProductItem = React.memo(function ProductItem({
@@ -273,10 +191,8 @@ export const Products = React.memo(function Products() {
       return;
     }
 
-    create({
-      id: `temp-${Date.now()}`,
-      ...newProduct,
-    });
+    // id is auto-generated; pass one explicitly only if needed
+    create(newProduct);
 
     setNewProduct({ name: "", price: 0, category: "electronics", stock: 0 });
     setShowCreateForm(false);

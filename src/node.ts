@@ -1,20 +1,23 @@
 import {
   sortBy,
   map,
-  uniqueId,
   isEqual,
   join,
   get,
   head,
   find,
+  findIndex,
   filter,
   maxBy,
   minBy,
   forEach,
+  size,
+  clamp,
 } from "lodash-es";
 import type { Draft } from "mutative";
 import type { Collection } from "./collection";
 import type { ItemStatus } from "./types";
+import { ulid } from "ulid";
 
 const DEFAULT_SEPARATOR = ".";
 
@@ -42,6 +45,7 @@ export type TreeNode<T, NodeType = string> = {
   position: number;
   value: T;
   type: NodeType;
+  clientUpdatedAt?: number;
 };
 
 export class Node<T extends object, C = unknown, NodeType = string> {
@@ -86,6 +90,14 @@ export class Node<T extends object, C = unknown, NodeType = string> {
     return this._cachedStatus;
   }
 
+  private _touch(id: string): void {
+    if (this._collection.items.has(id)) {
+      this._collection.update(id, (draft) => {
+        draft.clientUpdatedAt = Date.now();
+      });
+    }
+  }
+
   getParent(): Node<T, C, NodeType> | null {
     const parentId = getParentId(this._id, this._separator);
     return parentId ? this._collection.getNode<T, NodeType>(parentId) : null;
@@ -104,8 +116,100 @@ export class Node<T extends object, C = unknown, NodeType = string> {
 
   private _generateChildId(): string {
     const { getNodeId } = this._collection.config;
-    const nodeId = getNodeId ? getNodeId() : uniqueId();
+    const nodeId = getNodeId ? getNodeId() : ulid();
     return join([this._id, nodeId], this._separator);
+  }
+
+  moveUp(): void {
+    const nodeData = this.data;
+    if (!nodeData) return;
+
+    const parentId = getParentId(this._id, this._separator);
+    if (!parentId) return;
+
+    const parentNode = this._collection.getNode<T, NodeType>(parentId);
+    const siblings = parentNode.getChildren();
+    const idx = findIndex(siblings, (s) => s.id === this._id);
+
+    if (idx <= 0) return;
+
+    const prevSibling = siblings[idx - 1];
+    const prevData = prevSibling.data;
+    if (!prevData) return;
+
+    const currentPosition = nodeData.position;
+    this._collection.batch(() => {
+      this._collection.update(prevSibling.id, (draft) => {
+        draft.position = currentPosition;
+      });
+      this._collection.update(this._id, (draft) => {
+        draft.position = prevData.position;
+      });
+      this._touch(parentId);
+    });
+  }
+
+  moveDown(): void {
+    const nodeData = this.data;
+    if (!nodeData) return;
+
+    const parentId = getParentId(this._id, this._separator);
+    if (!parentId) return;
+
+    const parentNode = this._collection.getNode<T, NodeType>(parentId);
+    const siblings = parentNode.getChildren();
+    const idx = findIndex(siblings, (s) => s.id === this._id);
+
+    if (idx === -1 || idx >= size(siblings) - 1) return;
+
+    const nextSibling = siblings[idx + 1];
+    const nextData = nextSibling.data;
+    if (!nextData) return;
+
+    const currentPosition = nodeData.position;
+    this._collection.batch(() => {
+      this._collection.update(nextSibling.id, (draft) => {
+        draft.position = currentPosition;
+      });
+      this._collection.update(this._id, (draft) => {
+        draft.position = nextData.position;
+      });
+      this._touch(parentId);
+    });
+  }
+
+  setPosition(targetIndex: number): void {
+    const nodeData = this.data;
+    if (!nodeData) return;
+
+    const parentId = getParentId(this._id, this._separator);
+    if (!parentId) return;
+
+    const parentNode = this._collection.getNode<T, NodeType>(parentId);
+    const siblings = parentNode.getChildren();
+    const currentIndex = findIndex(siblings, (s) => s.id === this._id);
+
+    if (currentIndex === -1) return;
+
+    const clampedIndex = clamp(targetIndex, 0, size(siblings) - 1);
+    if (clampedIndex === currentIndex) return;
+
+    // Remove from current position, insert at target, reassign positions
+    const reordered = [...siblings];
+    const [removed] = reordered.splice(currentIndex, 1);
+    reordered.splice(clampedIndex, 0, removed);
+
+    this._collection.batch(() => {
+      forEach(reordered, (sibling, index) => {
+        const siblingData = sibling.data;
+        if (siblingData && siblingData.position !== index) {
+          this._collection.update(sibling.id, (draft) => {
+            draft.position = index;
+          });
+        }
+      });
+      this._touch(parentId);
+    });
   }
 
   append(value: T, type: NodeType = "object" as NodeType): string {
@@ -116,7 +220,10 @@ export class Node<T extends object, C = unknown, NodeType = string> {
     const newId = this._generateChildId();
 
     const newNode: TreeNode<T, NodeType> = { id: newId, position, value, type };
-    this._collection.create(newNode);
+    this._collection.batch(() => {
+      this._collection.create(newNode);
+      this._touch(this._id);
+    });
     return newId;
   }
 
@@ -128,7 +235,10 @@ export class Node<T extends object, C = unknown, NodeType = string> {
     const newId = this._generateChildId();
 
     const newNode: TreeNode<T, NodeType> = { id: newId, position, value, type };
-    this._collection.create(newNode);
+    this._collection.batch(() => {
+      this._collection.create(newNode);
+      this._touch(this._id);
+    });
     return newId;
   }
 
@@ -164,6 +274,7 @@ export class Node<T extends object, C = unknown, NodeType = string> {
         this._collection.update(this._id, (draft) => {
           draft.position = targetPosition;
         });
+        this._touch(currentParentId);
       });
       return;
     }
@@ -202,7 +313,7 @@ export class Node<T extends object, C = unknown, NodeType = string> {
     if (!nodeData) return new Map();
 
     const { getNodeId } = this._collection.config;
-    const cloneRootId = getNodeId ? getNodeId() : uniqueId();
+    const cloneRootId = getNodeId ? getNodeId() : ulid();
     const result = new Map<string, TreeNode<T, NodeType>>();
 
     // Clone self
@@ -292,6 +403,7 @@ export class Node<T extends object, C = unknown, NodeType = string> {
       this._collection.create(newNode);
     });
 
+    this._touch(this._id);
     return newRootId;
   }
 
@@ -302,6 +414,7 @@ export class Node<T extends object, C = unknown, NodeType = string> {
   }
 
   remove(): void {
+    const parentId = getParentId(this._id, this._separator);
     const items = [...this._collection.items.keys()];
     const descendantIds = map(
       filter(items, (id) => isDescendant(id, this._id, this._separator)),
@@ -312,14 +425,11 @@ export class Node<T extends object, C = unknown, NodeType = string> {
     this._collection.batch(() => {
       const sorted = sortBy(toRemove, (id) => -getDepth(id, this._separator));
       forEach(sorted, (id) => this._collection.remove(id));
+      if (parentId) this._touch(parentId);
     });
   }
 
   select(): void {
     this._collection.selectNode(this._id);
-  }
-
-  _updateId(newId: string): void {
-    this._id = newId;
   }
 }

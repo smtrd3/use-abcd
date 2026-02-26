@@ -39,7 +39,7 @@
   "dependencies": {
     "lodash-es": "^4.17.21",
     "mutative": "^1.2.0",
-    "nanoid": "^5.1.5"
+    "ulid": "^2.3.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.33.0",

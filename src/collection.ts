@@ -1,5 +1,5 @@
 import { create, type Draft } from "mutative";
-import { last, get } from "lodash-es";
+import { fromPairs, map, set } from "lodash-es";
 import { SyncQueue } from "./sync-queue";
 import { FetchHandler } from "./fetch-handler";
 import { Item } from "./item";
@@ -11,9 +11,8 @@ import type {
   ItemStatus,
   SyncQueueState,
   FetchState,
-  IdMapping,
   Change,
-  SyncResult,
+  Result,
 } from "./types";
 
 export type CollectionState<T, C> = {
@@ -27,34 +26,46 @@ export type CollectionState<T, C> = {
   fetchError?: string;
 };
 
-export class Collection<T extends object, C> {
-  // Global cache of collection instances by id
+export function buildServerSnapshot<T extends { id: string }, C>(config: Config<T, C>): CollectionState<T, C> {
+  const items = new Map<string, T>();
+  if (config.serverItems) {
+    for (const item of config.serverItems) {
+      items.set(item.id, item);
+    }
+  }
+  return {
+    context: config.initialContext,
+    items,
+    syncState: "idle",
+    loading: false,
+    syncing: false,
+    syncQueue: { queue: new Map(), inFlight: new Map(), errors: new Map(), isSyncing: false, isPaused: false },
+    fetchStatus: "idle",
+    fetchError: undefined,
+  };
+}
+
+export class Collection<T extends { id: string }, C> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private static _cache = new Map<string, Collection<any, any>>();
 
-  // Get or create a collection instance
-  static get<T extends object, C>(config: Config<T, C>): Collection<T, C> {
+  static get<T extends { id: string }, C>(config: Config<T, C>): Collection<T, C> {
     const existing = Collection._cache.get(config.id);
-    if (existing) {
-      return existing as Collection<T, C>;
-    }
+    if (existing) return existing as Collection<T, C>;
     const collection = new Collection(config);
     Collection._cache.set(config.id, collection);
     return collection;
   }
 
-  // Clear a specific collection from cache
   static clear(id: string): void {
     Collection._cache.delete(id);
   }
 
-  // Clear all collections from cache
   static clearAll(): void {
     Collection._cache.clear();
   }
 
-  // Get existing collection by ID (returns undefined if not found)
-  static getById<T extends object, C>(id: string): Collection<T, C> | undefined {
+  static getById<T extends { id: string }, C>(id: string): Collection<T, C> | undefined {
     return Collection._cache.get(id) as Collection<T, C> | undefined;
   }
 
@@ -76,26 +87,38 @@ export class Collection<T extends object, C> {
     this.id = config.id;
     this.config = config;
 
-    // Initialize SyncQueue
-    // Default no-op sync handler for offline-first mode (all operations succeed locally)
-    const defaultOnSync = async (changes: Change<T>[]): Promise<SyncResult[]> =>
-      changes.map((c) => ({ id: c.id, status: "success" as const }));
+    // Derive fetch/sync from unified handler
+    const fetchFn = config.handler
+      ? (ctx: C, signal: AbortSignal) =>
+          config.handler!({ query: ctx }, signal).then((r) => r.results ?? [])
+      : async () => [] as T[];
+
+    const defaultSyncResult = (changes: Change<T>[]) =>
+      fromPairs(map(changes, (c) => [c.id, { status: "success" as const }])) as Record<
+        string,
+        Result
+      >;
+
+    const syncFn = config.handler
+      ? (changes: Change<T>[], _ctx: C, signal: AbortSignal) =>
+          config.handler!({ changes }, signal).then(
+            (r) => r.syncResults ?? defaultSyncResult(changes),
+          )
+      : async (changes: Change<T>[]) => defaultSyncResult(changes);
 
     this._syncQueue = new SyncQueue<T, C>({
       debounce: config.syncDebounce ?? 300,
       maxRetries: config.syncRetries ?? 3,
       getContext: () => this._state.context,
-      onSync: config.onSync ?? defaultOnSync,
-      onIdRemap: (mappings) => this._handleIdRemap(mappings),
+      onSync: syncFn,
     });
 
-    // Initialize FetchHandler
     this._fetchHandler = new FetchHandler<T, C>({
       id: config.id,
       cacheCapacity: config.cacheCapacity ?? 10,
       cacheTtl: config.cacheTtl ?? 60000,
       retries: config.fetchRetries ?? 0,
-      onFetch: config.onFetch,
+      onFetch: fetchFn,
     });
 
     // Initialize state
@@ -112,21 +135,11 @@ export class Collection<T extends object, C> {
       fetchError: fetchState.error,
     };
 
-    // Subscribe to SyncQueue changes
-    this._syncQueue.subscribe(() => {
-      this._onSyncQueueChange();
-    });
-
-    // Subscribe to FetchHandler changes
-    this._fetchHandler.subscribe(() => {
-      this._onFetchChange();
-    });
-
-    // Start initial fetch
+    this._syncQueue.subscribe(() => this._onSyncQueueChange());
+    this._fetchHandler.subscribe(() => this._onFetchChange());
     this._initialFetch();
   }
 
-  // Getters for convenience (read from state)
   get context(): C {
     return this._state.context;
   }
@@ -147,44 +160,35 @@ export class Collection<T extends object, C> {
     return this._state.syncQueue;
   }
 
-  // Subscribe to state changes
   subscribe(callback: () => void): () => void {
     this._subscribers.add(callback);
-    return () => {
-      this._subscribers.delete(callback);
-    };
+    return () => this._subscribers.delete(callback);
   }
 
-  // Get current state (for useSyncExternalStore) - returns cached reference
   getState(): CollectionState<T, C> {
     return this._state;
   }
 
-  // Get item status from sync queue state
   getItemStatus(id: string): ItemStatus {
     const { queue, inFlight, errors } = this._state.syncQueue;
 
-    const inFlightChanges = inFlight.get(id);
-    const lastInFlight = last(inFlightChanges);
-    if (lastInFlight) {
-      // Use the last operation as the most relevant status
+    const inFlightChange = inFlight.get(id);
+    if (inFlightChange) {
       return {
-        type: lastInFlight.type,
+        type: inFlightChange.type,
         status: "syncing",
-        retries: get(errors.get(id), "retries", 0),
+        retries: errors.get(id)?.retries ?? 0,
       };
     }
 
-    const queuedChanges = queue.get(id);
-    const lastQueued = last(queuedChanges);
-    if (lastQueued) {
-      // Use the last operation as the most relevant status
+    const queuedChange = queue.get(id);
+    if (queuedChange) {
       const errorInfo = errors.get(id);
       return {
-        type: lastQueued.type,
+        type: queuedChange.type,
         status: errorInfo ? "error" : "pending",
-        retries: get(errorInfo, "retries", 0),
-        error: get(errorInfo, "error"),
+        retries: errorInfo?.retries ?? 0,
+        error: errorInfo?.error,
       };
     }
 
@@ -201,9 +205,8 @@ export class Collection<T extends object, C> {
     return null;
   }
 
-  // Create a new item (local-first)
-  create(item: T): void {
-    const id = this.config.getId(item);
+  create(item: T): string {
+    const { id } = item;
 
     this._state = create(this._state, (draft) => {
       draft.items.set(id, item as Draft<T>);
@@ -212,9 +215,9 @@ export class Collection<T extends object, C> {
     this._fetchHandler.invalidateCache();
     this._notifySubscribers();
     this._syncQueue.enqueue({ id, type: "create", data: item });
+    return id;
   }
 
-  // Update an existing item (local-first)
   update(id: string, mutate: (draft: Draft<T>) => void): void {
     const currentItem = this._state.items.get(id);
     if (!currentItem) return;
@@ -222,6 +225,7 @@ export class Collection<T extends object, C> {
     const newItem = create(currentItem, mutate);
 
     this._state = create(this._state, (draft) => {
+      set(newItem, "id", id); // ensure id is not changed
       draft.items.set(id, newItem as Draft<T>);
     });
 
@@ -230,7 +234,6 @@ export class Collection<T extends object, C> {
     this._syncQueue.enqueue({ id, type: "update", data: newItem });
   }
 
-  // Remove an item (local-first)
   remove(id: string): void {
     const item = this._state.items.get(id);
     if (!item) return;
@@ -239,22 +242,15 @@ export class Collection<T extends object, C> {
       draft.items.delete(id);
     });
 
-    // WeakMap will automatically GC the Item when data object is no longer referenced
     this._fetchHandler.invalidateCache();
     this._notifySubscribers();
-
     this._syncQueue.enqueue({ id, type: "delete", data: item });
   }
 
-  // Get Item reference (cached by data object)
   getItem(id: string): Item<T, C> {
     const data = this._state.items.get(id);
-    if (!data) {
-      // Item doesn't exist, create a placeholder that will return undefined
-      return new Item(this, id);
-    }
+    if (!data) return new Item(this, id);
 
-    // Use data object as WeakMap key
     const dataAsObject = data as T & object;
     let item = this._itemCache.get(dataAsObject);
     if (!item) {
@@ -264,9 +260,8 @@ export class Collection<T extends object, C> {
     return item;
   }
 
-  // Get Node reference (cached by data object) - for tree collections
   getNode<V extends object, NodeType = string>(id: string): Node<V, C, NodeType> {
-    const data = this._state.items.get(id) as TreeNode<V, NodeType> | undefined;
+    const data = this._state.items.get(id) as unknown as TreeNode<V, NodeType> | undefined;
     if (!data) {
       return new Node(this as unknown as Collection<TreeNode<V, NodeType>, C>, id);
     }
@@ -280,18 +275,17 @@ export class Collection<T extends object, C> {
     return node;
   }
 
-  // Execute multiple operations with single notification at the end
   batch(fn: () => void): void {
+    const wasBatching = this._batchMode;
     this._batchMode = true;
     try {
       fn();
     } finally {
-      this._batchMode = false;
-      this._notifySubscribers();
+      this._batchMode = wasBatching;
+      if (!wasBatching) this._notifySubscribers();
     }
   }
 
-  // Selection methods for tree nodes
   selectNode(id: string): void {
     if (this._selectedNodeId !== id) {
       this._selectedNodeId = id;
@@ -315,7 +309,6 @@ export class Collection<T extends object, C> {
     return this._selectedNodeId ? this.getNode(this._selectedNodeId) : null;
   }
 
-  // Update context and refetch
   setContext(patchContext: Mutator<C>): void {
     const oldContext = this._state.context;
     const newContext = create(oldContext, patchContext);
@@ -330,20 +323,17 @@ export class Collection<T extends object, C> {
     }
   }
 
-  // Force refresh (bypass cache)
   async refresh(): Promise<void> {
     this._fetchHandler.invalidateCache();
     await this._fetchHandler.fetch(this._state.context);
   }
 
-  // SyncQueue controls
   pauseSync(): void {
     this._syncQueue.pause();
   }
 
   resumeSync(): void {
     this._syncQueue.resume();
-    // Refetch to get fresh data after resuming
     this._fetchHandler.invalidateCache();
     this._fetchHandler.fetch(this._state.context);
   }
@@ -356,7 +346,6 @@ export class Collection<T extends object, C> {
     }
   }
 
-  // Cleanup everything and remove from global cache
   destroy(): void {
     this._syncQueue.destroy();
     this._fetchHandler.destroy();
@@ -364,51 +353,42 @@ export class Collection<T extends object, C> {
     Collection._cache.delete(this.id);
   }
 
-  // Private methods
   private async _initialFetch(): Promise<void> {
     if (this._hasInitialized) return;
     this._hasInitialized = true;
+
+    if (this.config.serverItems) {
+      this._state = create(this._state, (draft) => {
+        for (const item of this.config.serverItems!) {
+          draft.items.set(item.id, item as Draft<T>);
+        }
+      });
+      this._notifySubscribers();
+      return;
+    }
+
+    if (typeof window === "undefined") return;
+
     await this._fetchHandler.fetch(this._state.context);
   }
 
   private _onSyncQueueChange(): void {
-    const currState = this._syncQueue.getState();
-    this._updateSyncState(currState);
+    this._updateSyncState(this._syncQueue.getState());
   }
 
   private _onFetchChange(): void {
     const fetchState = this._fetchHandler.getState();
 
-    // Single state update
     this._state = create(this._state, (draft) => {
       draft.fetchStatus = fetchState.status;
       draft.fetchError = fetchState.error;
       draft.loading = fetchState.status === "fetching";
       draft.syncState = this._computeSyncState(fetchState.status, draft.syncQueue.isSyncing);
 
-      const { queue, inFlight } = this._state.syncQueue;
       const newItems = new Map<string, Draft<T>>();
 
-      // Add all fetched items
       for (const item of fetchState.items) {
-        const id = this.config.getId(item);
-        newItems.set(id, item as Draft<T>);
-      }
-
-      // Preserve local pending changes (creates/updates not yet synced)
-      for (const [id, changes] of queue) {
-        // Use the last change's data as the most up-to-date local state
-        const lastChange = last(changes);
-        if (lastChange && (lastChange.type === "create" || lastChange.type === "update")) {
-          newItems.set(id, lastChange.data as Draft<T>);
-        }
-      }
-      for (const [id, changes] of inFlight) {
-        // Use the last change's data as the most up-to-date local state
-        const lastChange = last(changes);
-        if (lastChange && (lastChange.type === "create" || lastChange.type === "update")) {
-          newItems.set(id, lastChange.data as Draft<T>);
-        }
+        newItems.set(item.id, item as Draft<T>);
       }
 
       draft.items = newItems;
@@ -428,12 +408,8 @@ export class Collection<T extends object, C> {
   }
 
   private _computeSyncState(fetchStatus: FetchState, isSyncing: boolean): SyncState {
-    if (fetchStatus === "fetching") {
-      return "fetching";
-    }
-    if (isSyncing) {
-      return "syncing";
-    }
+    if (fetchStatus === "fetching") return "fetching";
+    if (isSyncing) return "syncing";
     return "idle";
   }
 
@@ -442,50 +418,5 @@ export class Collection<T extends object, C> {
     for (const callback of this._subscribers) {
       callback();
     }
-  }
-
-  private _handleIdRemap(mappings: IdMapping[]): void {
-    if (mappings.length === 0) return;
-
-    const { setId } = this.config;
-
-    this._state = create(this._state, (draft) => {
-      for (const { tempId, newId } of mappings) {
-        // Get the item with the temporary ID
-        const item = draft.items.get(tempId);
-        if (item) {
-          // Update the item's id using setId if provided, otherwise assume 'id' property
-          let updatedItem: Draft<T>;
-          if (setId) {
-            updatedItem = setId(item as T, newId) as Draft<T>;
-          } else {
-            // Default: assume the item has an 'id' property
-            (item as Record<string, unknown>).id = newId;
-            updatedItem = item;
-          }
-
-          // Remove old entry and add with new ID
-          draft.items.delete(tempId);
-          draft.items.set(newId, updatedItem);
-        }
-      }
-    });
-
-    // Update cached Item instances with new IDs
-    // Since we use data objects as WeakMap keys, the WeakMap automatically
-    // maps the new data object created above to any cached Item instances
-    for (const { newId } of mappings) {
-      const data = this._state.items.get(newId);
-      if (data) {
-        const dataAsObject = data as T & object;
-        const cachedItem = this._itemCache.get(dataAsObject);
-        if (cachedItem) {
-          // Update the Item's internal ID to the new permanent ID
-          cachedItem._updateId(newId);
-        }
-      }
-    }
-
-    this._notifySubscribers();
   }
 }

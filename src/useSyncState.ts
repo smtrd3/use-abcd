@@ -5,8 +5,8 @@ import type { SyncState, Change, SyncError } from "./types";
 export type UseSyncStateResult<T = unknown> = {
   syncState: SyncState;
   syncing: boolean;
-  queue: Map<string, Change<T>[]>;
-  inFlight: Map<string, Change<T>[]>;
+  queue: Map<string, Change<T>>;
+  inFlight: Map<string, Change<T>>;
   errors: Map<string, SyncError<T>>;
   isPaused: boolean;
   isSyncing: boolean;
@@ -38,8 +38,8 @@ export function useSyncState<T = unknown>(collectionId: string): UseSyncStateRes
   return {
     syncState: state.syncState,
     syncing: state.syncing,
-    queue: state.syncQueue.queue as Map<string, Change<T>[]>,
-    inFlight: state.syncQueue.inFlight as Map<string, Change<T>[]>,
+    queue: state.syncQueue.queue as Map<string, Change<T>>,
+    inFlight: state.syncQueue.inFlight as Map<string, Change<T>>,
     errors: state.syncQueue.errors as Map<string, SyncError<T>>,
     isPaused: state.syncQueue.isPaused,
     isSyncing: state.syncQueue.isSyncing,

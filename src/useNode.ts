@@ -1,5 +1,4 @@
-import { useSyncExternalStore, useCallback, useRef } from "react";
-import { isEqual, size } from "lodash-es";
+import { useSyncExternalStore, useCallback, useMemo } from "react";
 import type { Draft } from "mutative";
 import type { Node, TreeNode } from "./node";
 import type { ItemStatus } from "./types";
@@ -19,6 +18,9 @@ export type UseNodeResult<T extends object, C, NodeType = string> = {
   append: (value: T, type?: NodeType) => string;
   prepend: (value: T, type?: NodeType) => string;
   move: (targetPosition: number, targetParent?: Node<T, C, NodeType>) => void;
+  moveUp: () => void;
+  moveDown: () => void;
+  setPosition: (targetIndex: number) => void;
   clone: () => Map<string, TreeNode<T, NodeType>>;
   updateProp: (mutate: (draft: Draft<T>) => void) => void;
   remove: () => void;
@@ -26,63 +28,40 @@ export type UseNodeResult<T extends object, C, NodeType = string> = {
   deselect: () => void;
 };
 
-// Helper to compare children arrays by their IDs
-function childrenChanged<T extends object, C, NodeType>(
-  prev: Node<T, C, NodeType>[],
-  next: Node<T, C, NodeType>[],
-): boolean {
-  if (!isEqual(size(prev), size(next))) return true;
-  for (let i = 0; i < size(prev); i++) {
-    if (!isEqual(prev[i].id, next[i].id)) return true;
-  }
-  return false;
-}
-
-type NodeSnapshot<T extends object, C, NodeType> = {
-  data: TreeNode<T, NodeType> | undefined;
-  status: ItemStatus;
-  exists: boolean;
-  isSelected: boolean;
-  children: Node<T, C, NodeType>[];
-};
-
-const DEFAULT_NODE_VALUE = {
-  data: undefined,
-  status: null,
-  exists: false,
-  isSelected: false,
-  children: [],
-};
-
 export function useNode<T extends object, C, NodeType = string>(
   node: Node<T, C, NodeType>,
 ): UseNodeResult<T, C, NodeType> {
-  // Cache for reference stability
-  const snapshotRef = useRef<NodeSnapshot<T, C, NodeType>>(DEFAULT_NODE_VALUE);
+  const subscribe = useCallback((cb: () => void) => node.collection.subscribe(cb), [node]);
 
-  const snapshot = useSyncExternalStore(
-    (cb) => node.collection.subscribe(cb),
-    () => {
-      const nextChildren = node.getChildren();
-      const prev = snapshotRef.current;
-
-      const children = !childrenChanged(prev.children, nextChildren) ? prev.children : nextChildren;
-      const nextSnapshot: NodeSnapshot<T, C, NodeType> = {
-        data: node.data,
-        status: node.getStatus(),
-        exists: node.exists(),
-        isSelected: isEqual(node.collection.selectedNodeId, node.id),
-        children,
-      };
-
-      if (!isEqual(prev, nextSnapshot)) {
-        snapshotRef.current = nextSnapshot;
-      }
-
-      return snapshotRef.current;
-    },
-    () => snapshotRef.current,
+  const data = useSyncExternalStore(
+    subscribe,
+    () => node.data,
+    () => node.data,
   );
+
+  const status = useSyncExternalStore(
+    subscribe,
+    () => node.getStatus(),
+    () => node.getStatus(),
+  );
+
+  const exists = useSyncExternalStore(
+    subscribe,
+    () => node.exists(),
+    () => node.exists(),
+  );
+
+  const isSelected = useSyncExternalStore(
+    subscribe,
+    () => node.collection.selectedNodeId === node.id,
+    () => node.collection.selectedNodeId === node.id,
+  );
+
+  // Recompute children only when the node's data reference changes.
+  // Mutations that affect children (append, remove, reorder) bump
+  // clientUpdatedAt on the parent, producing a new data reference.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const children = useMemo(() => node.getChildren(), [data, node]);
 
   const getParent = useCallback(() => node.getParent(), [node]);
   const append = useCallback((value: T, type?: NodeType) => node.append(value, type), [node]);
@@ -91,6 +70,9 @@ export function useNode<T extends object, C, NodeType = string>(
     (pos: number, targetParent?: Node<T, C, NodeType>) => node.move(pos, targetParent),
     [node],
   );
+  const moveUp = useCallback(() => node.moveUp(), [node]);
+  const moveDown = useCallback(() => node.moveDown(), [node]);
+  const setPosition = useCallback((targetIndex: number) => node.setPosition(targetIndex), [node]);
   const clone = useCallback(() => node.clone(), [node]);
   const updateProp = useCallback(
     (mutate: (draft: Draft<T>) => void) => node.updateProp(mutate),
@@ -102,16 +84,19 @@ export function useNode<T extends object, C, NodeType = string>(
 
   return {
     isPresent: true,
-    data: snapshot.data,
-    status: snapshot.status,
-    exists: snapshot.exists,
-    isSelected: snapshot.isSelected,
+    data,
+    status,
+    exists,
+    isSelected,
     depth: node.depth,
     getParent,
-    children: snapshot.children,
+    children,
     append,
     prepend,
     move,
+    moveUp,
+    moveDown,
+    setPosition,
     clone,
     updateProp,
     remove,

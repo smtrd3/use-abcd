@@ -33,31 +33,18 @@ export type ItemStatus = {
   error?: string;
 } | null;
 
-export type SyncResult = {
-  id: string;
-  status: "success" | "error";
-  error?: string;
-  newId?: string; // For create operations: the server-assigned ID to replace the temporary ID
-};
-
-// ID mapping from temporary to permanent ID (for create operations)
-export type IdMapping = {
-  tempId: string;
-  newId: string;
-};
-
 // Error info for failed sync operations
 export type SyncError<T> = {
   error: string;
   retries: number;
-  operations: Change<T>[]; // The operations that failed, for manual retry
+  operation: Change<T>;
 };
 
 // SyncQueue state (accessible via getState/subscribe)
 export type SyncQueueState<T> = {
-  queue: Map<string, Change<T>[]>; // pending changes per item (coalesced operations)
-  inFlight: Map<string, Change<T>[]>; // currently syncing operations per item
-  errors: Map<string, SyncError<T>>; // failed items with retry info and operations
+  queue: Map<string, Change<T>>;
+  inFlight: Map<string, Change<T>>;
+  errors: Map<string, SyncError<T>>;
   isPaused: boolean;
   isSyncing: boolean;
 };
@@ -65,12 +52,17 @@ export type SyncQueueState<T> = {
 // FetchHandler types
 export type FetchState = "idle" | "fetching" | "error";
 
+// Unified handler type
+export type CrudHandler<T extends { id: string }, C> = (
+  params: { query?: C; changes?: Change<T>[] },
+  signal: AbortSignal,
+) => Promise<{ results?: T[]; syncResults?: Record<string, Result>; serverTimeStamp?: string }>;
+
 // Config
-export type Config<T extends object, C> = {
+export type Config<T extends { id: string }, C> = {
   id: string;
   initialContext: C;
-  getId: (item: T) => string;
-  setId?: (item: T, newId: string) => T; // Optional: update item's ID after server assigns permanent ID
+  serverItems?: T[];
 
   // Sync configuration
   syncDebounce?: number; // ms, default 300
@@ -89,7 +81,6 @@ export type Config<T extends object, C> = {
   getNodeId?: () => string; // Custom node ID generator (default: lodash uniqueId)
   nodeSeparator?: string; // Separator for node IDs (default: ".")
 
-  // Handlers
-  onFetch: (context: C, signal: AbortSignal) => Promise<T[]>;
-  onSync?: (changes: Change<T>[], context: C, signal: AbortSignal) => Promise<SyncResult[]>;
+  // Unified handler (replaces onFetch + onSync)
+  handler?: CrudHandler<T, C>;
 };

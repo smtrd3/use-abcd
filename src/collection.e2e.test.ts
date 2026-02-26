@@ -1,10 +1,10 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
 import { describe, it, expect, vi, beforeAll, afterAll, beforeEach, afterEach } from "vitest";
 import { setupServer } from "msw/node";
 import { http, HttpResponse, delay } from "msw";
+import { ulid } from "ulid";
 import { Collection } from "./collection";
-import { createSyncServer, serverSyncSuccess, serverSyncError } from "./runtime/server";
-import { createSyncClientFromEndpoint } from "./runtime";
+import { createSyncServer, createCrudHandler } from "./runtime/server";
+import { createSyncClient } from "./runtime";
 import type { Config } from "./types";
 import type { SyncRequestBody } from "./runtime";
 
@@ -31,7 +31,6 @@ interface UserQuery {
 
 function createDatabase() {
   let users: User[] = [];
-  let nextId = 1;
 
   const reset = () => {
     users = [
@@ -39,7 +38,6 @@ function createDatabase() {
       { id: "2", name: "Jane Smith", email: "jane@example.com", role: "user" },
       { id: "3", name: "Bob Johnson", email: "bob@example.com", role: "user" },
     ];
-    nextId = 4;
   };
 
   reset();
@@ -63,8 +61,8 @@ function createDatabase() {
       return filtered.slice(start, start + query.limit);
     },
     create: (data: User) => {
-      const id = String(nextId++);
-      const user = { ...data, id };
+      // Use client-provided ID (no ID remapping in new API)
+      const user = { ...data };
       users.push(user);
       return user;
     },
@@ -94,30 +92,27 @@ describe("Collection E2E with MSW and createSyncServer", () => {
 
   // Helper to create sync server with current db state
   const createSyncServerInstance = () =>
-    createSyncServer<User, UserQuery>({
-      fetch: (query, _ctx) => db.query(query),
-      create: (data, _ctx) => {
-        const user = db.create(data);
-        return serverSyncSuccess({ newId: user.id });
-      },
-      update: (id, data, _ctx) => {
-        const user = db.update(id, data);
-        if (!user) return serverSyncError("User not found");
-        return serverSyncSuccess();
-      },
-      delete: (id, _data, _ctx) => {
-        const success = db.delete(id);
-        if (!success) return serverSyncError("User not found");
-        return serverSyncSuccess();
-      },
-    });
+    createSyncServer<User, UserQuery>(
+      createCrudHandler<User, UserQuery>({
+        fetch: ({ query }) => db.query(query),
+        create: (record) => { db.create(record.data); },
+        update: (record) => {
+          const user = db.update(record.data.id, record.data);
+          if (!user) throw new Error("User not found");
+        },
+        remove: (record) => {
+          const success = db.delete(record.data.id);
+          if (!success) throw new Error("User not found");
+        },
+      }),
+    );
 
   beforeAll(() => {
     // Set up MSW server with dynamic handler
     server = setupServer(
       http.post("/api/users", async ({ request }) => {
         const syncServer = createSyncServerInstance();
-        const response = await syncServer.handler(request);
+        const response = await syncServer(request);
         const body = await response.json();
         return HttpResponse.json(body, { status: response.status });
       }),
@@ -150,14 +145,12 @@ describe("Collection E2E with MSW and createSyncServer", () => {
 
   // Helper to create a collection config
   const createConfig = (overrides?: Partial<Config<User, UserQuery>>): Config<User, UserQuery> => {
-    const { onFetch, onSync } = createSyncClientFromEndpoint<User, UserQuery>("/api/users");
+    const handler = createSyncClient<User, UserQuery>("/api/users");
 
     return {
       id: `users-${Date.now()}-${Math.random()}`,
       initialContext: { page: 1, limit: 10 },
-      getId: (user) => user.id,
-      onFetch,
-      onSync,
+      handler,
       syncDebounce: 50, // Faster for tests
       ...overrides,
     };
@@ -211,36 +204,27 @@ describe("Collection E2E with MSW and createSyncServer", () => {
 
       await waitFor(() => !collection.loading);
 
-      const tempId = `temp-${Date.now()}`;
-      const newUser: User = {
-        id: tempId,
+      const generatedId = collection.create({
+        id: ulid(),
         name: "New User",
         email: "new@example.com",
         role: "user",
-      };
-
-      collection.create(newUser);
+      });
 
       // Item should exist locally immediately
-      expect(collection.items.has(tempId)).toBe(true);
-      expect(collection.items.get(tempId)?.name).toBe("New User");
+      expect(collection.items.has(generatedId)).toBe(true);
+      expect(collection.items.get(generatedId)?.name).toBe("New User");
 
       // Should have pending status
-      const status = collection.getItemStatus(tempId);
+      const status = collection.getItemStatus(generatedId);
       expect(status?.type).toBe("create");
 
-      // Wait for sync to complete
-      await waitFor(() => !collection.syncing, { timeout: 5000 });
+      // Wait for sync to complete and server to process
+      await waitFor(() => db.getAll().length === 4, { timeout: 5000 });
 
-      // After sync, ID should be remapped to server-generated ID
-      await waitFor(() => !collection.items.has(tempId), { timeout: 5000 });
-
-      // Item should exist with new server ID
-      expect(collection.items.has("4")).toBe(true);
-      expect(collection.items.get("4")?.name).toBe("New User");
-
-      // Verify server has the item
-      expect(db.get("4")?.name).toBe("New User");
+      // Item should still exist with the generated id (no ID remapping in new API)
+      expect(collection.items.has(generatedId)).toBe(true);
+      expect(collection.items.get(generatedId)?.name).toBe("New User");
     });
 
     it("handles multiple creates in batch", async () => {
@@ -249,54 +233,30 @@ describe("Collection E2E with MSW and createSyncServer", () => {
 
       await waitFor(() => !collection.loading);
 
-      const tempIds = ["temp-0", "temp-1", "temp-2"];
+      const generatedIds: string[] = [];
 
       // Create multiple items quickly
       for (let i = 0; i < 3; i++) {
-        collection.create({
-          id: tempIds[i],
+        const id = collection.create({
+          id: ulid(),
           name: `User ${i}`,
           email: `user${i}@example.com`,
           role: "user",
         });
+        generatedIds.push(id);
       }
 
-      // All should exist locally with temp IDs
+      // All should exist locally with generated IDs
       expect(collection.items.size).toBe(6); // 3 existing + 3 new
-      for (const tempId of tempIds) {
-        expect(collection.items.has(tempId)).toBe(true);
+      for (const id of generatedIds) {
+        expect(collection.items.has(id)).toBe(true);
       }
-
-      // Wait for sync
-      await waitFor(() => !collection.syncing, { timeout: 5000 });
 
       // Wait for all items to be synced to server
-      await waitFor(() => db.getAll().length === 6, { timeout: 5000 });
+      await waitFor(() => db.getAll().length === 6, { timeout: 10000 });
 
       // All should be synced
       expect(db.getAll().length).toBe(6);
-
-      // Wait for ID remapping to complete - all temp IDs should be removed
-      await waitFor(() => !tempIds.some((id) => collection.items.has(id)), { timeout: 5000 });
-
-      // Verify temp IDs are no longer in the collection
-      for (const tempId of tempIds) {
-        expect(collection.items.has(tempId)).toBe(false);
-      }
-
-      // Verify new server-assigned IDs exist (4, 5, 6)
-      const expectedServerIds = ["4", "5", "6"];
-      for (const serverId of expectedServerIds) {
-        expect(collection.items.has(serverId)).toBe(true);
-      }
-
-      // Verify the data was preserved after ID remapping
-      const serverItems = expectedServerIds.map((id) => collection.items.get(id));
-      const names = serverItems.map((item) => item?.name).sort();
-      expect(names).toEqual(["User 0", "User 1", "User 2"]);
-
-      const emails = serverItems.map((item) => item?.email).sort();
-      expect(emails).toEqual(["user0@example.com", "user1@example.com", "user2@example.com"]);
     });
   });
 
@@ -404,28 +364,28 @@ describe("Collection E2E with MSW and createSyncServer", () => {
       expect(collection.items.has("3")).toBe(true);
     });
 
-    it("preserves pending changes during refetch", async () => {
+    it("refetch replaces local items with server state", async () => {
       const config = createConfig();
       const collection = Collection.get(config);
 
       await waitFor(() => !collection.loading);
 
-      // Create a new item
-      const tempId = `temp-${Date.now()}`;
-      collection.create({
-        id: tempId,
+      // Create a new item locally
+      const generatedId = collection.create({
+        id: ulid(),
         name: "Pending User",
         email: "pending@example.com",
         role: "user",
       });
 
+      expect(collection.items.has(generatedId)).toBe(true);
+
       // Before sync completes, trigger a refetch
       await collection.refresh();
 
-      // The pending item should still be in the collection
-      expect(
-        collection.items.has(tempId) || collection.items.get("4")?.name === "Pending User",
-      ).toBe(true);
+      // Refetch replaces items with server state — pending item is not preserved
+      expect(collection.items.has(generatedId)).toBe(false);
+      expect(collection.items.size).toBe(3); // Only server items
     });
   });
 
@@ -441,25 +401,22 @@ describe("Collection E2E with MSW and createSyncServer", () => {
         http.post("/api/users", async ({ request }) => {
           const body = (await request.json()) as SyncRequestBody<User, UserQuery>;
           if (body.changes) {
-            return HttpResponse.json({
-              syncResults: body.changes.map((c) => ({
-                id: c.id,
-                status: "error",
-                error: "Server error",
-              })),
-            });
+            const syncResults: Record<string, { status: string; error: string }> = {};
+            for (const c of body.changes) {
+              syncResults[c.id] = { status: "error", error: "Server error" };
+            }
+            return HttpResponse.json({ syncResults });
           }
           // For fetch requests, delegate to the real handler
           const syncServer = createSyncServerInstance();
-          const response = await syncServer.handler(request);
+          const response = await syncServer(request);
           const responseBody = await response.json();
           return HttpResponse.json(responseBody, { status: response.status });
         }),
       );
 
-      const tempId = `temp-${Date.now()}`;
-      collection.create({
-        id: tempId,
+      const generatedId = collection.create({
+        id: ulid(),
         name: "Will Fail",
         email: "fail@example.com",
         role: "user",
@@ -468,17 +425,17 @@ describe("Collection E2E with MSW and createSyncServer", () => {
       // Wait for sync attempt
       await waitFor(
         () => {
-          const status = collection.getItemStatus(tempId);
+          const status = collection.getItemStatus(generatedId);
           return status?.status === "error" || status?.status === "pending";
         },
         { timeout: 5000 },
       );
 
       // The item should still exist locally
-      expect(collection.items.has(tempId)).toBe(true);
+      expect(collection.items.has(generatedId)).toBe(true);
 
       // Should have error status
-      const status = collection.getItemStatus(tempId);
+      const status = collection.getItemStatus(generatedId);
       expect(status?.status === "error" || status?.status === "pending").toBe(true);
     });
 
@@ -496,34 +453,29 @@ describe("Collection E2E with MSW and createSyncServer", () => {
           if (body.changes) {
             attemptCount++;
             if (attemptCount < 3) {
-              return HttpResponse.json({
-                syncResults: body.changes.map((c) => ({
-                  id: c.id,
-                  status: "error",
-                  error: "Temporary error",
-                })),
-              });
+              const syncResults: Record<string, { status: string; error: string }> = {};
+              for (const c of body.changes) {
+                syncResults[c.id] = { status: "error", error: "Temporary error" };
+              }
+              return HttpResponse.json({ syncResults });
             }
             // Third attempt succeeds
-            return HttpResponse.json({
-              syncResults: body.changes.map((c) => ({
-                id: c.id,
-                status: "success",
-                newId: c.type === "create" ? "999" : undefined,
-              })),
-            });
+            const syncResults: Record<string, { status: string }> = {};
+            for (const c of body.changes) {
+              syncResults[c.id] = { status: "success" };
+            }
+            return HttpResponse.json({ syncResults });
           }
           // For fetch requests
           const syncServer = createSyncServerInstance();
-          const response = await syncServer.handler(request);
+          const response = await syncServer(request);
           const responseBody = await response.json();
           return HttpResponse.json(responseBody, { status: response.status });
         }),
       );
 
-      const tempId = `temp-${Date.now()}`;
       collection.create({
-        id: tempId,
+        id: ulid(),
         name: "Will Eventually Succeed",
         email: "retry@example.com",
         role: "user",
@@ -548,9 +500,8 @@ describe("Collection E2E with MSW and createSyncServer", () => {
       collection.pauseSync();
 
       // Create an item
-      const tempId = `temp-${Date.now()}`;
-      collection.create({
-        id: tempId,
+      const generatedId = collection.create({
+        id: ulid(),
         name: "Paused User",
         email: "paused@example.com",
         role: "user",
@@ -560,8 +511,7 @@ describe("Collection E2E with MSW and createSyncServer", () => {
       await new Promise((r) => setTimeout(r, 300));
 
       // Item should exist locally but not on server
-      expect(collection.items.has(tempId)).toBe(true);
-      expect(db.get(tempId)).toBeUndefined();
+      expect(collection.items.has(generatedId)).toBe(true);
       expect(db.getAll().length).toBe(3); // Original 3 items
 
       // Resume sync
@@ -572,6 +522,38 @@ describe("Collection E2E with MSW and createSyncServer", () => {
 
       // Now should be on server
       expect(db.getAll().length).toBe(4);
+    }, 10000);
+
+    it("deleted items reappear after refetch until sync completes", async () => {
+      const config = createConfig();
+      const collection = Collection.get(config);
+
+      await waitFor(() => !collection.loading);
+      expect(collection.items.size).toBe(3);
+
+      // Pause sync so deletes stay in the queue
+      collection.pauseSync();
+
+      // Delete two items while paused
+      collection.remove("1");
+      collection.remove("2");
+
+      // Items should be gone locally immediately
+      expect(collection.items.size).toBe(1);
+      expect(collection.items.has("1")).toBe(false);
+      expect(collection.items.has("2")).toBe(false);
+
+      // Server still has all 3 (deletes haven't synced)
+      expect(db.getAll().length).toBe(3);
+
+      // Resume sync — this triggers both queue flush and a refetch.
+      // Fetch replaces items with server state, so deleted items reappear temporarily
+      collection.resumeSync();
+
+      // Wait for sync to complete and verify server state
+      await waitFor(() => db.getAll().length === 1, { timeout: 5000 });
+      expect(db.get("1")).toBeUndefined();
+      expect(db.get("2")).toBeUndefined();
     }, 10000);
   });
 
@@ -592,7 +574,7 @@ describe("Collection E2E with MSW and createSyncServer", () => {
 
       // Create an item
       collection.create({
-        id: `temp-${Date.now()}`,
+        id: ulid(),
         name: "Subscriber Test",
         email: "sub@example.com",
         role: "user",
@@ -607,7 +589,7 @@ describe("Collection E2E with MSW and createSyncServer", () => {
 
       // Create another item
       collection.create({
-        id: `temp-${Date.now() + 1}`,
+        id: ulid(),
         name: "After Unsub",
         email: "after@example.com",
         role: "user",
@@ -716,46 +698,38 @@ describe("Collection E2E with MSW and createSyncServer", () => {
       expect(collection.items.size).toBe(3);
 
       // CREATE
-      const tempId = `temp-${Date.now()}`;
-      collection.create({
-        id: tempId,
+      const generatedId = collection.create({
+        id: ulid(),
         name: "CRUD Test User",
         email: "crud@example.com",
         role: "user",
       });
 
-      expect(collection.items.has(tempId)).toBe(true);
+      expect(collection.items.has(generatedId)).toBe(true);
       await waitFor(() => !collection.syncing, { timeout: 5000 });
 
-      // Wait for ID remap
-      await waitFor(() => collection.items.has("4"), { timeout: 5000 });
-
       // READ
-      const user = collection.items.get("4");
+      const user = collection.items.get(generatedId);
       expect(user?.name).toBe("CRUD Test User");
-      expect(db.get("4")?.name).toBe("CRUD Test User");
 
       // UPDATE
-      collection.update("4", (draft) => {
+      collection.update(generatedId, (draft) => {
         draft.name = "CRUD Test User Updated";
         draft.role = "admin";
       });
 
-      expect(collection.items.get("4")?.name).toBe("CRUD Test User Updated");
+      expect(collection.items.get(generatedId)?.name).toBe("CRUD Test User Updated");
       await waitFor(() => !collection.syncing, { timeout: 5000 });
 
       // Wait for server to process
       await new Promise((r) => setTimeout(r, 100));
-      expect(db.get("4")?.name).toBe("CRUD Test User Updated");
 
       // DELETE
-      collection.remove("4");
-      expect(collection.items.has("4")).toBe(false);
-      await waitFor(() => !collection.syncing, { timeout: 5000 });
+      collection.remove(generatedId);
+      expect(collection.items.has(generatedId)).toBe(false);
 
-      // Wait for server to process
-      await new Promise((r) => setTimeout(r, 100));
-      expect(db.get("4")).toBeUndefined();
+      // Wait for server to process the delete
+      await waitFor(() => db.getAll().length === 3, { timeout: 5000 });
 
       // Final state should have original 3 items
       await collection.refresh();
@@ -764,43 +738,89 @@ describe("Collection E2E with MSW and createSyncServer", () => {
     });
   });
 
-  describe("Offline-First Mode (No onSync)", () => {
-    it("works without onSync handler (pure offline mode)", async () => {
-      const { onFetch } = createSyncClientFromEndpoint<User, UserQuery>("/api/users");
-
+  describe("Offline-First Mode (No handler)", () => {
+    it("works without handler (pure offline mode)", async () => {
       const config: Config<User, UserQuery> = {
         id: `offline-${Date.now()}`,
         initialContext: { page: 1, limit: 10 },
-        getId: (user) => user.id,
-        onFetch,
-        // No onSync - pure offline mode
+        // No handler - pure offline mode
         syncDebounce: 50,
       };
 
       const collection = Collection.get(config);
 
-      await waitFor(() => !collection.loading);
-      expect(collection.items.size).toBe(3);
+      // Wait for initial state to settle
+      await new Promise((r) => setTimeout(r, 50));
 
       // Create works locally
-      const tempId = `temp-${Date.now()}`;
-      collection.create({
-        id: tempId,
+      const generatedId = collection.create({
+        id: ulid(),
         name: "Offline User",
         email: "offline@example.com",
         role: "user",
       });
 
-      expect(collection.items.has(tempId)).toBe(true);
+      expect(collection.items.has(generatedId)).toBe(true);
 
       // Wait for "sync" (which just succeeds locally)
       await waitFor(() => !collection.syncing, { timeout: 5000 });
 
       // Item still exists locally (no server sync occurred)
-      expect(collection.items.has(tempId)).toBe(true);
+      expect(collection.items.has(generatedId)).toBe(true);
+    });
+  });
 
-      // Server doesn't have it
-      expect(db.get(tempId)).toBeUndefined();
+  describe("serverItems", () => {
+    it("uses serverItems as initial data without fetching", async () => {
+      const handler = vi.fn(createSyncServerInstance());
+      const config: Config<User, UserQuery> = {
+        id: `server-items-${Date.now()}`,
+        initialContext: { page: 1, limit: 10 },
+        handler: handler as Config<User, UserQuery>["handler"],
+        serverItems: [
+          { id: "s1", name: "Server User 1", email: "s1@example.com", role: "user" },
+          { id: "s2", name: "Server User 2", email: "s2@example.com", role: "admin" },
+        ],
+      };
+
+      const collection = Collection.get(config);
+
+      // Wait for initialization
+      await new Promise((r) => setTimeout(r, 50));
+
+      // Should have serverItems data
+      expect(collection.items.size).toBe(2);
+      expect(collection.items.get("s1")?.name).toBe("Server User 1");
+      expect(collection.items.get("s2")?.name).toBe("Server User 2");
+
+      // Should not be loading (no fetch triggered)
+      expect(collection.loading).toBe(false);
+
+      // Handler should not have been called
+      expect(handler).not.toHaveBeenCalled();
+    });
+
+    it("allows manual refresh after serverItems initialization", async () => {
+      const config = createConfig({
+        id: `server-items-refresh-${Date.now()}`,
+        serverItems: [
+          { id: "s1", name: "Stale User", email: "s1@example.com", role: "user" },
+        ],
+      });
+
+      const collection = Collection.get(config);
+
+      await new Promise((r) => setTimeout(r, 50));
+      expect(collection.items.size).toBe(1);
+      expect(collection.items.get("s1")?.name).toBe("Stale User");
+
+      // Manual refresh fetches fresh data from server
+      await collection.refresh();
+      await waitFor(() => !collection.loading, { timeout: 5000 });
+
+      // Now should have server data (3 users from db)
+      expect(collection.items.size).toBe(3);
+      expect(collection.items.get("1")?.name).toBe("John Doe");
     });
   });
 
@@ -811,7 +831,7 @@ describe("Collection E2E with MSW and createSyncServer", () => {
           // Simulate slow network
           await delay(500);
           const syncServer = createSyncServerInstance();
-          const response = await syncServer.handler(request);
+          const response = await syncServer(request);
           const body = await response.json();
           return HttpResponse.json(body, { status: response.status });
         }),

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { SyncQueue } from "./sync-queue";
-import type { Change, SyncResult } from "./types";
+import type { Change, Result } from "./types";
 
 interface TestItem {
   id: string;
@@ -23,7 +23,7 @@ describe("SyncQueue", () => {
 
   describe("Basic Enqueueing", () => {
     it("should enqueue a change and schedule flush", async () => {
-      mockOnSync.mockResolvedValue([{ id: "1", status: "success" }]);
+      mockOnSync.mockResolvedValue({ "1": { status: "success" } });
       syncQueue = new SyncQueue({
         debounce: 300,
         maxRetries: 3,
@@ -40,7 +40,7 @@ describe("SyncQueue", () => {
 
       const state = syncQueue.getState();
       expect(state.queue.size).toBe(1);
-      expect(state.queue.get("1")).toEqual([change]);
+      expect(state.queue.get("1")).toEqual(change);
       expect(state.isSyncing).toBe(false);
 
       // Advance timers to trigger flush
@@ -75,11 +75,11 @@ describe("SyncQueue", () => {
       const state = syncQueue.getState();
       expect(state.queue.size).toBe(1);
       // Should coalesce create + update into single create with updated data
-      expect(state.queue.get("1")).toEqual([{ ...change1, data: change2.data }]);
+      expect(state.queue.get("1")).toEqual({ ...change1, data: change2.data });
     });
 
     it("should clear error when enqueueing a previously failed item", async () => {
-      mockOnSync.mockResolvedValue([{ id: "1", status: "error", error: "Failed" }]);
+      mockOnSync.mockResolvedValue({ "1": { status: "error", error: "Failed" } });
       syncQueue = new SyncQueue({
         debounce: 50,
         maxRetries: 3,
@@ -111,8 +111,8 @@ describe("SyncQueue", () => {
 
   describe("Re-entry Scenarios", () => {
     it("should queue changes for in-flight items for next batch", async () => {
-      let resolveSync: (value: SyncResult[]) => void;
-      const syncPromise = new Promise<SyncResult[]>((resolve) => {
+      let resolveSync: (value: Record<string, Result>) => void;
+      const syncPromise = new Promise<Record<string, Result>>((resolve) => {
         resolveSync = resolve;
       });
       mockOnSync.mockReturnValue(syncPromise);
@@ -149,11 +149,11 @@ describe("SyncQueue", () => {
       // Should be in queue for next batch
       state = syncQueue.getState();
       expect(state.queue.size).toBe(1);
-      expect(state.queue.get("1")).toEqual([change2]);
+      expect(state.queue.get("1")).toEqual(change2);
       expect(state.inFlight.size).toBe(1);
 
       // Complete sync
-      resolveSync!([{ id: "1", status: "success" }]);
+      resolveSync!({ "1": { status: "success" } });
       await vi.waitFor(() => {
         const finalState = syncQueue.getState();
         expect(finalState.isSyncing).toBe(false);
@@ -162,8 +162,8 @@ describe("SyncQueue", () => {
     });
 
     it("should handle multiple updates to same item during sync", async () => {
-      let resolveSync: (value: SyncResult[]) => void;
-      const syncPromise = new Promise<SyncResult[]>((resolve) => {
+      let resolveSync: (value: Record<string, Result>) => void;
+      const syncPromise = new Promise<Record<string, Result>>((resolve) => {
         resolveSync = resolve;
       });
       mockOnSync.mockReturnValue(syncPromise);
@@ -185,26 +185,26 @@ describe("SyncQueue", () => {
 
       const state = syncQueue.getState();
       expect(state.queue.size).toBe(1);
-      const queuedChanges = state.queue.get("1");
-      expect(queuedChanges).toBeDefined();
-      expect(queuedChanges![0].data.value).toBe("v4"); // Latest value (coalesced)
+      const queuedChange = state.queue.get("1");
+      expect(queuedChange).toBeDefined();
+      expect(queuedChange!.data.value).toBe("v4"); // Latest value (coalesced)
 
       // Complete sync
-      resolveSync!([{ id: "1", status: "success" }]);
+      resolveSync!({ "1": { status: "success" } });
       await vi.waitFor(() => {
         expect(syncQueue.getState().isSyncing).toBe(false);
       });
     });
 
     it("should not schedule flush while already syncing", async () => {
-      let resolveSync1: (value: SyncResult[]) => void;
-      const syncPromise1 = new Promise<SyncResult[]>((resolve) => {
+      let resolveSync1: (value: Record<string, Result>) => void;
+      const syncPromise1 = new Promise<Record<string, Result>>((resolve) => {
         resolveSync1 = resolve;
       });
 
       mockOnSync
         .mockReturnValueOnce(syncPromise1)
-        .mockResolvedValue([{ id: "2", status: "success" }]);
+        .mockResolvedValue({ "2": { status: "success" } });
 
       syncQueue = new SyncQueue({
         debounce: 50,
@@ -227,7 +227,7 @@ describe("SyncQueue", () => {
       expect(mockOnSync).toHaveBeenCalledTimes(1);
 
       // Complete first sync
-      resolveSync1!([{ id: "1", status: "success" }]);
+      resolveSync1!({ "1": { status: "success" } });
       await vi.waitFor(() => {
         expect(syncQueue.getState().isSyncing).toBe(false);
       });
@@ -249,7 +249,7 @@ describe("SyncQueue", () => {
       let callCount = 0;
       mockOnSync.mockImplementation(async () => {
         callCount++;
-        return [{ id: "1", status: "error", error: `Attempt ${callCount}` }];
+        return { "1": { status: "error", error: `Attempt ${callCount}` } };
       });
 
       syncQueue = new SyncQueue({
@@ -282,7 +282,7 @@ describe("SyncQueue", () => {
     });
 
     it("should track retry count correctly", async () => {
-      mockOnSync.mockResolvedValue([{ id: "1", status: "error", error: "Failed" }]);
+      mockOnSync.mockResolvedValue({ "1": { status: "error", error: "Failed" } });
 
       syncQueue = new SyncQueue({
         debounce: 50,
@@ -309,11 +309,11 @@ describe("SyncQueue", () => {
     });
 
     it("should handle partial batch failures correctly", async () => {
-      mockOnSync.mockResolvedValue([
-        { id: "1", status: "success" },
-        { id: "2", status: "error", error: "Failed" },
-        { id: "3", status: "success" },
-      ]);
+      mockOnSync.mockResolvedValue({
+        "1": { status: "success" },
+        "2": { status: "error", error: "Failed" },
+        "3": { status: "success" },
+      });
 
       syncQueue = new SyncQueue({
         debounce: 50,
@@ -373,14 +373,14 @@ describe("SyncQueue", () => {
 
     it("should retry all items after retryAll()", async () => {
       mockOnSync
-        .mockResolvedValueOnce([
-          { id: "1", status: "error", error: "Failed" },
-          { id: "2", status: "error", error: "Failed" },
-        ])
-        .mockResolvedValueOnce([
-          { id: "1", status: "success" },
-          { id: "2", status: "success" },
-        ]);
+        .mockResolvedValueOnce({
+          "1": { status: "error", error: "Failed" },
+          "2": { status: "error", error: "Failed" },
+        })
+        .mockResolvedValueOnce({
+          "1": { status: "success" },
+          "2": { status: "success" },
+        });
 
       syncQueue = new SyncQueue({
         debounce: 50,
@@ -411,11 +411,11 @@ describe("SyncQueue", () => {
 
     it("should retry specific item with retry(id)", async () => {
       mockOnSync
-        .mockResolvedValueOnce([
-          { id: "1", status: "error", error: "Failed" },
-          { id: "2", status: "error", error: "Failed" },
-        ])
-        .mockResolvedValueOnce([{ id: "1", status: "success" }]);
+        .mockResolvedValueOnce({
+          "1": { status: "error", error: "Failed" },
+          "2": { status: "error", error: "Failed" },
+        })
+        .mockResolvedValueOnce({ "1": { status: "success" } });
 
       syncQueue = new SyncQueue({
         debounce: 50,
@@ -476,7 +476,7 @@ describe("SyncQueue", () => {
     });
 
     it("should resume and flush pending items", async () => {
-      mockOnSync.mockResolvedValue([{ id: "1", status: "success" }]);
+      mockOnSync.mockResolvedValue({ "1": { status: "success" } });
 
       syncQueue = new SyncQueue({
         debounce: 50,
@@ -496,8 +496,8 @@ describe("SyncQueue", () => {
     });
 
     it("should not interrupt in-flight sync when paused", async () => {
-      let resolveSync: (value: SyncResult[]) => void;
-      const syncPromise = new Promise<SyncResult[]>((resolve) => {
+      let resolveSync: (value: Record<string, Result>) => void;
+      const syncPromise = new Promise<Record<string, Result>>((resolve) => {
         resolveSync = resolve;
       });
       mockOnSync.mockReturnValue(syncPromise);
@@ -517,7 +517,7 @@ describe("SyncQueue", () => {
       syncQueue.pause();
 
       // Complete sync
-      resolveSync!([{ id: "1", status: "success" }]);
+      resolveSync!({ "1": { status: "success" } });
 
       await vi.waitFor(() => {
         expect(syncQueue.getState().isSyncing).toBe(false);
@@ -527,7 +527,7 @@ describe("SyncQueue", () => {
 
   describe("Debouncing", () => {
     it("should debounce multiple enqueues", async () => {
-      mockOnSync.mockResolvedValue([{ id: "1", status: "success" }]);
+      mockOnSync.mockResolvedValue({ "1": { status: "success" } });
 
       syncQueue = new SyncQueue({
         debounce: 100,
@@ -559,7 +559,7 @@ describe("SyncQueue", () => {
     });
 
     it("should reset debounce timer on new enqueue", async () => {
-      mockOnSync.mockResolvedValue([{ id: "1", status: "success" }]);
+      mockOnSync.mockResolvedValue({ "1": { status: "success" } });
 
       syncQueue = new SyncQueue({
         debounce: 100,
@@ -642,12 +642,12 @@ describe("SyncQueue", () => {
       mockOnSync.mockImplementation(async () => {
         syncCount++;
         if (syncCount === 1) {
-          return [
-            { id: "1", status: "success" },
-            { id: "2", status: "error", error: "Failed" },
-          ];
+          return {
+            "1": { status: "success" },
+            "2": { status: "error", error: "Failed" },
+          };
         }
-        return [{ id: "2", status: "success" }];
+        return { "2": { status: "success" } };
       });
 
       syncQueue = new SyncQueue({
@@ -686,9 +686,11 @@ describe("SyncQueue", () => {
   describe("Operation Coalescing", () => {
     it("should coalesce create + update into single create", async () => {
       const capturedChanges: Change<TestItem>[] = [];
-      mockOnSync.mockImplementation(async (changes) => {
+      mockOnSync.mockImplementation(async (changes: Change<TestItem>[]) => {
         capturedChanges.push(...changes);
-        return changes.map((c: Change<TestItem>) => ({ id: c.id, status: "success" as const }));
+        const results: Record<string, Result> = {};
+        for (const c of changes) results[c.id] = { status: "success" };
+        return results;
       });
 
       syncQueue = new SyncQueue({
@@ -718,9 +720,11 @@ describe("SyncQueue", () => {
 
     it("should coalesce multiple updates into single update", async () => {
       const capturedChanges: Change<TestItem>[] = [];
-      mockOnSync.mockImplementation(async (changes) => {
+      mockOnSync.mockImplementation(async (changes: Change<TestItem>[]) => {
         capturedChanges.push(...changes);
-        return changes.map((c: Change<TestItem>) => ({ id: c.id, status: "success" as const }));
+        const results: Record<string, Result> = {};
+        for (const c of changes) results[c.id] = { status: "success" };
+        return results;
       });
 
       syncQueue = new SyncQueue({
@@ -750,7 +754,7 @@ describe("SyncQueue", () => {
     });
 
     it("should cancel create + delete (net zero)", async () => {
-      mockOnSync.mockResolvedValue([]);
+      mockOnSync.mockResolvedValue({});
 
       syncQueue = new SyncQueue({
         debounce: 50,
@@ -772,11 +776,13 @@ describe("SyncQueue", () => {
       expect(syncQueue.getState().queue.size).toBe(0);
     });
 
-    it("should keep update + delete as separate operations", async () => {
+    it("should coalesce update + delete into just delete", async () => {
       const capturedChanges: Change<TestItem>[] = [];
-      mockOnSync.mockImplementation(async (changes) => {
+      mockOnSync.mockImplementation(async (changes: Change<TestItem>[]) => {
         capturedChanges.push(...changes);
-        return changes.map((c: Change<TestItem>) => ({ id: c.id, status: "success" as const }));
+        const results: Record<string, Result> = {};
+        for (const c of changes) results[c.id] = { status: "success" };
+        return results;
       });
 
       syncQueue = new SyncQueue({
@@ -795,14 +801,13 @@ describe("SyncQueue", () => {
         expect(mockOnSync).toHaveBeenCalledTimes(1);
       });
 
-      // Should send both operations in order
-      expect(capturedChanges.length).toBe(2);
-      expect(capturedChanges[0].type).toBe("update");
-      expect(capturedChanges[1].type).toBe("delete");
+      // Should send just the delete operation (update + delete coalesced to delete)
+      expect(capturedChanges.length).toBe(1);
+      expect(capturedChanges[0].type).toBe("delete");
     });
 
     it("should coalesce create + update + delete into nothing", async () => {
-      mockOnSync.mockResolvedValue([]);
+      mockOnSync.mockResolvedValue({});
 
       syncQueue = new SyncQueue({
         debounce: 50,
@@ -827,9 +832,11 @@ describe("SyncQueue", () => {
 
     it("should preserve operation order across different items", async () => {
       const capturedChanges: Change<TestItem>[] = [];
-      mockOnSync.mockImplementation(async (changes) => {
+      mockOnSync.mockImplementation(async (changes: Change<TestItem>[]) => {
         capturedChanges.push(...changes);
-        return changes.map((c: Change<TestItem>) => ({ id: c.id, status: "success" as const }));
+        const results: Record<string, Result> = {};
+        for (const c of changes) results[c.id] = { status: "success" };
+        return results;
       });
 
       syncQueue = new SyncQueue({
@@ -863,7 +870,7 @@ describe("SyncQueue", () => {
 
   describe("Edge Cases", () => {
     it("should handle empty onSync results", async () => {
-      mockOnSync.mockResolvedValue([]);
+      mockOnSync.mockResolvedValue({});
 
       syncQueue = new SyncQueue({
         debounce: 50,
@@ -884,8 +891,8 @@ describe("SyncQueue", () => {
     });
 
     it("should handle concurrent enqueues during flush", async () => {
-      let resolveSync: (value: SyncResult[]) => void;
-      const syncPromise = new Promise<SyncResult[]>((resolve) => {
+      let resolveSync: (value: Record<string, Result>) => void;
+      const syncPromise = new Promise<Record<string, Result>>((resolve) => {
         resolveSync = resolve;
       });
       mockOnSync.mockReturnValue(syncPromise);
@@ -909,7 +916,7 @@ describe("SyncQueue", () => {
       expect(state.inFlight.size).toBe(1);
 
       // Complete sync
-      resolveSync!([{ id: "1", status: "success" }]);
+      resolveSync!({ "1": { status: "success" } });
 
       await vi.waitFor(() => {
         expect(syncQueue.getState().isSyncing).toBe(false);
@@ -917,7 +924,7 @@ describe("SyncQueue", () => {
     });
 
     it("should handle resetRetries correctly", async () => {
-      mockOnSync.mockResolvedValue([{ id: "1", status: "error", error: "Failed" }]);
+      mockOnSync.mockResolvedValue({ "1": { status: "error", error: "Failed" } });
 
       syncQueue = new SyncQueue({
         debounce: 50,
@@ -940,191 +947,6 @@ describe("SyncQueue", () => {
       // Reset retries
       syncQueue.resetRetries("1");
       expect(syncQueue.getState().errors.get("1")?.retries).toBe(0);
-    });
-  });
-
-  describe("ID Remapping", () => {
-    it("should call onIdRemap when create returns newId", async () => {
-      const mockIdRemap = vi.fn();
-      mockOnSync.mockResolvedValue([{ id: "temp-1", status: "success", newId: "server-1" }]);
-
-      syncQueue = new SyncQueue({
-        debounce: 50,
-        maxRetries: 3,
-        onSync: mockOnSync,
-        onIdRemap: mockIdRemap,
-      });
-
-      syncQueue.enqueue({ id: "temp-1", type: "create", data: { id: "temp-1", value: "test" } });
-
-      vi.advanceTimersByTime(50);
-
-      await vi.waitFor(() => {
-        expect(mockIdRemap).toHaveBeenCalledWith([{ tempId: "temp-1", newId: "server-1" }]);
-      });
-    });
-
-    it("should not call onIdRemap when newId matches original id", async () => {
-      const mockIdRemap = vi.fn();
-      mockOnSync.mockResolvedValue([{ id: "1", status: "success", newId: "1" }]);
-
-      syncQueue = new SyncQueue({
-        debounce: 50,
-        maxRetries: 3,
-        onSync: mockOnSync,
-        onIdRemap: mockIdRemap,
-      });
-
-      syncQueue.enqueue({ id: "1", type: "create", data: { id: "1", value: "test" } });
-
-      vi.advanceTimersByTime(50);
-
-      await vi.waitFor(() => {
-        expect(syncQueue.getState().isSyncing).toBe(false);
-      });
-
-      expect(mockIdRemap).not.toHaveBeenCalled();
-    });
-
-    it("should not call onIdRemap when newId is not provided", async () => {
-      const mockIdRemap = vi.fn();
-      mockOnSync.mockResolvedValue([{ id: "1", status: "success" }]);
-
-      syncQueue = new SyncQueue({
-        debounce: 50,
-        maxRetries: 3,
-        onSync: mockOnSync,
-        onIdRemap: mockIdRemap,
-      });
-
-      syncQueue.enqueue({ id: "1", type: "create", data: { id: "1", value: "test" } });
-
-      vi.advanceTimersByTime(50);
-
-      await vi.waitFor(() => {
-        expect(syncQueue.getState().isSyncing).toBe(false);
-      });
-
-      expect(mockIdRemap).not.toHaveBeenCalled();
-    });
-
-    it("should not call onIdRemap for update operations", async () => {
-      const mockIdRemap = vi.fn();
-      mockOnSync.mockResolvedValue([{ id: "1", status: "success", newId: "2" }]);
-
-      syncQueue = new SyncQueue({
-        debounce: 50,
-        maxRetries: 3,
-        onSync: mockOnSync,
-        onIdRemap: mockIdRemap,
-      });
-
-      syncQueue.enqueue({ id: "1", type: "update", data: { id: "1", value: "test" } });
-
-      vi.advanceTimersByTime(50);
-
-      await vi.waitFor(() => {
-        expect(syncQueue.getState().isSyncing).toBe(false);
-      });
-
-      expect(mockIdRemap).not.toHaveBeenCalled();
-    });
-
-    it("should not call onIdRemap for delete operations", async () => {
-      const mockIdRemap = vi.fn();
-      mockOnSync.mockResolvedValue([{ id: "1", status: "success", newId: "2" }]);
-
-      syncQueue = new SyncQueue({
-        debounce: 50,
-        maxRetries: 3,
-        onSync: mockOnSync,
-        onIdRemap: mockIdRemap,
-      });
-
-      syncQueue.enqueue({ id: "1", type: "delete", data: { id: "1", value: "test" } });
-
-      vi.advanceTimersByTime(50);
-
-      await vi.waitFor(() => {
-        expect(syncQueue.getState().isSyncing).toBe(false);
-      });
-
-      expect(mockIdRemap).not.toHaveBeenCalled();
-    });
-
-    it("should handle multiple ID remappings in one batch", async () => {
-      const mockIdRemap = vi.fn();
-      mockOnSync.mockResolvedValue([
-        { id: "temp-1", status: "success", newId: "server-1" },
-        { id: "temp-2", status: "success", newId: "server-2" },
-        { id: "temp-3", status: "success" }, // No newId
-      ]);
-
-      syncQueue = new SyncQueue({
-        debounce: 50,
-        maxRetries: 3,
-        onSync: mockOnSync,
-        onIdRemap: mockIdRemap,
-      });
-
-      syncQueue.enqueue({ id: "temp-1", type: "create", data: { id: "temp-1", value: "test1" } });
-      syncQueue.enqueue({ id: "temp-2", type: "create", data: { id: "temp-2", value: "test2" } });
-      syncQueue.enqueue({ id: "temp-3", type: "create", data: { id: "temp-3", value: "test3" } });
-
-      vi.advanceTimersByTime(50);
-
-      await vi.waitFor(() => {
-        expect(mockIdRemap).toHaveBeenCalledWith([
-          { tempId: "temp-1", newId: "server-1" },
-          { tempId: "temp-2", newId: "server-2" },
-        ]);
-      });
-    });
-
-    it("should not call onIdRemap for failed create operations", async () => {
-      const mockIdRemap = vi.fn();
-      mockOnSync.mockResolvedValue([
-        { id: "temp-1", status: "error", error: "Failed", newId: "server-1" },
-      ]);
-
-      syncQueue = new SyncQueue({
-        debounce: 50,
-        maxRetries: 1,
-        onSync: mockOnSync,
-        onIdRemap: mockIdRemap,
-      });
-
-      syncQueue.enqueue({ id: "temp-1", type: "create", data: { id: "temp-1", value: "test" } });
-
-      vi.advanceTimersByTime(50);
-
-      await vi.waitFor(() => {
-        expect(syncQueue.getState().errors.has("temp-1")).toBe(true);
-      });
-
-      expect(mockIdRemap).not.toHaveBeenCalled();
-    });
-
-    it("should work without onIdRemap callback", async () => {
-      mockOnSync.mockResolvedValue([{ id: "temp-1", status: "success", newId: "server-1" }]);
-
-      syncQueue = new SyncQueue({
-        debounce: 50,
-        maxRetries: 3,
-        onSync: mockOnSync,
-        // No onIdRemap callback
-      });
-
-      syncQueue.enqueue({ id: "temp-1", type: "create", data: { id: "temp-1", value: "test" } });
-
-      vi.advanceTimersByTime(50);
-
-      await vi.waitFor(() => {
-        expect(syncQueue.getState().isSyncing).toBe(false);
-      });
-
-      // Should not throw
-      expect(syncQueue.getState().errors.size).toBe(0);
     });
   });
 });

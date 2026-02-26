@@ -18,9 +18,8 @@ describe("Node", () => {
     config = {
       id: "test-node",
       initialContext: {},
-      getId: (item) => item.id,
       rootId: "root",
-      onFetch: async () => [],
+      handler: async () => ({ results: [] }),
     };
   });
 
@@ -1117,10 +1116,17 @@ describe("Node", () => {
       const customConfig: Config<TreeNode<TestValue>, TestContext> = {
         ...config,
         id: "test-node-status-pending",
-        onSync: async (changes) => {
-          // Delay sync to keep items in pending state
-          await new Promise((resolve) => setTimeout(resolve, 500));
-          return changes.map((c) => ({ id: c.id, status: "success" as const }));
+        handler: async (params) => {
+          if (params.changes) {
+            // Delay sync to keep items in pending state
+            await new Promise((resolve) => setTimeout(resolve, 500));
+            const syncResults: Record<string, { status: "success" }> = {};
+            for (const c of params.changes) {
+              syncResults[c.id] = { status: "success" };
+            }
+            return { syncResults };
+          }
+          return { results: [] };
         },
       };
 
@@ -1424,6 +1430,507 @@ describe("Node", () => {
       expect(newNode.data?.position).toBe(6);
 
       Collection.clear("test-node-merge-append");
+    });
+  });
+
+  describe("moveUp", () => {
+    it("swaps position with previous sibling", async () => {
+      const collection = Collection.get(config);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      collection.create({
+        id: "root",
+        position: 0,
+        value: { name: "Root" },
+        type: "object",
+      });
+      collection.create({
+        id: "root.a",
+        position: 0,
+        value: { name: "A" },
+        type: "object",
+      });
+      collection.create({
+        id: "root.b",
+        position: 1,
+        value: { name: "B" },
+        type: "object",
+      });
+      collection.create({
+        id: "root.c",
+        position: 2,
+        value: { name: "C" },
+        type: "object",
+      });
+
+      const nodeB = collection.getNode<TestValue>("root.b");
+      nodeB.moveUp();
+
+      const updatedA = collection.getNode<TestValue>("root.a");
+      const updatedB = collection.getNode<TestValue>("root.b");
+
+      expect(updatedB.data?.position).toBe(0);
+      expect(updatedA.data?.position).toBe(1);
+    });
+
+    it("does nothing when already first", async () => {
+      const collection = Collection.get(config);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      collection.create({
+        id: "root",
+        position: 0,
+        value: { name: "Root" },
+        type: "object",
+      });
+      collection.create({
+        id: "root.a",
+        position: 0,
+        value: { name: "A" },
+        type: "object",
+      });
+
+      const nodeA = collection.getNode<TestValue>("root.a");
+      const dataBefore = nodeA.data;
+      nodeA.moveUp();
+
+      expect(collection.getNode<TestValue>("root.a").data).toBe(dataBefore);
+    });
+
+    it("does nothing for root node", async () => {
+      const collection = Collection.get(config);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      collection.create({
+        id: "root",
+        position: 0,
+        value: { name: "Root" },
+        type: "object",
+      });
+
+      const root = collection.getNode<TestValue>("root");
+      root.moveUp();
+
+      expect(root.data?.position).toBe(0);
+    });
+
+    it("bumps parent clientUpdatedAt", async () => {
+      const collection = Collection.get(config);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      collection.create({
+        id: "root",
+        position: 0,
+        value: { name: "Root" },
+        type: "object",
+      });
+      collection.create({
+        id: "root.a",
+        position: 0,
+        value: { name: "A" },
+        type: "object",
+      });
+      collection.create({
+        id: "root.b",
+        position: 1,
+        value: { name: "B" },
+        type: "object",
+      });
+
+      const rootBefore = collection.getNode<TestValue>("root").data;
+      const nodeB = collection.getNode<TestValue>("root.b");
+      nodeB.moveUp();
+
+      const rootAfter = collection.getNode<TestValue>("root").data;
+      expect(rootAfter).not.toBe(rootBefore);
+      expect(rootAfter?.clientUpdatedAt).toBeDefined();
+    });
+  });
+
+  describe("moveDown", () => {
+    it("swaps position with next sibling", async () => {
+      const collection = Collection.get(config);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      collection.create({
+        id: "root",
+        position: 0,
+        value: { name: "Root" },
+        type: "object",
+      });
+      collection.create({
+        id: "root.a",
+        position: 0,
+        value: { name: "A" },
+        type: "object",
+      });
+      collection.create({
+        id: "root.b",
+        position: 1,
+        value: { name: "B" },
+        type: "object",
+      });
+      collection.create({
+        id: "root.c",
+        position: 2,
+        value: { name: "C" },
+        type: "object",
+      });
+
+      const nodeB = collection.getNode<TestValue>("root.b");
+      nodeB.moveDown();
+
+      const updatedB = collection.getNode<TestValue>("root.b");
+      const updatedC = collection.getNode<TestValue>("root.c");
+
+      expect(updatedB.data?.position).toBe(2);
+      expect(updatedC.data?.position).toBe(1);
+    });
+
+    it("does nothing when already last", async () => {
+      const collection = Collection.get(config);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      collection.create({
+        id: "root",
+        position: 0,
+        value: { name: "Root" },
+        type: "object",
+      });
+      collection.create({
+        id: "root.a",
+        position: 0,
+        value: { name: "A" },
+        type: "object",
+      });
+
+      const nodeA = collection.getNode<TestValue>("root.a");
+      const dataBefore = nodeA.data;
+      nodeA.moveDown();
+
+      expect(collection.getNode<TestValue>("root.a").data).toBe(dataBefore);
+    });
+
+    it("does nothing for root node", async () => {
+      const collection = Collection.get(config);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      collection.create({
+        id: "root",
+        position: 0,
+        value: { name: "Root" },
+        type: "object",
+      });
+
+      const root = collection.getNode<TestValue>("root");
+      root.moveDown();
+
+      expect(root.data?.position).toBe(0);
+    });
+
+    it("bumps parent clientUpdatedAt", async () => {
+      const collection = Collection.get(config);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      collection.create({
+        id: "root",
+        position: 0,
+        value: { name: "Root" },
+        type: "object",
+      });
+      collection.create({
+        id: "root.a",
+        position: 0,
+        value: { name: "A" },
+        type: "object",
+      });
+      collection.create({
+        id: "root.b",
+        position: 1,
+        value: { name: "B" },
+        type: "object",
+      });
+
+      const rootBefore = collection.getNode<TestValue>("root").data;
+      const nodeA = collection.getNode<TestValue>("root.a");
+      nodeA.moveDown();
+
+      const rootAfter = collection.getNode<TestValue>("root").data;
+      expect(rootAfter).not.toBe(rootBefore);
+      expect(rootAfter?.clientUpdatedAt).toBeDefined();
+    });
+  });
+
+  describe("clientUpdatedAt", () => {
+    it("is set on parent when child is appended", async () => {
+      const collection = Collection.get(config);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      collection.create({
+        id: "root",
+        position: 0,
+        value: { name: "Root" },
+        type: "object",
+      });
+
+      const rootBefore = collection.getNode<TestValue>("root").data;
+      expect(rootBefore?.clientUpdatedAt).toBeUndefined();
+
+      const root = collection.getNode<TestValue>("root");
+      root.append({ name: "Child" });
+
+      const rootAfter = collection.getNode<TestValue>("root").data;
+      expect(rootAfter?.clientUpdatedAt).toBeDefined();
+      expect(rootAfter).not.toBe(rootBefore);
+    });
+
+    it("is set on parent when child is prepended", async () => {
+      const collection = Collection.get(config);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      collection.create({
+        id: "root",
+        position: 0,
+        value: { name: "Root" },
+        type: "object",
+      });
+
+      const root = collection.getNode<TestValue>("root");
+      root.prepend({ name: "Child" });
+
+      const rootAfter = collection.getNode<TestValue>("root").data;
+      expect(rootAfter?.clientUpdatedAt).toBeDefined();
+    });
+
+    it("is set on parent when child is removed", async () => {
+      const collection = Collection.get(config);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      collection.create({
+        id: "root",
+        position: 0,
+        value: { name: "Root" },
+        type: "object",
+      });
+      collection.create({
+        id: "root.child",
+        position: 0,
+        value: { name: "Child" },
+        type: "object",
+      });
+
+      const rootBefore = collection.getNode<TestValue>("root").data;
+      const child = collection.getNode<TestValue>("root.child");
+      child.remove();
+
+      const rootAfter = collection.getNode<TestValue>("root").data;
+      expect(rootAfter?.clientUpdatedAt).toBeDefined();
+      expect(rootAfter).not.toBe(rootBefore);
+    });
+
+    it("is set on parent when child position changes via move", async () => {
+      const collection = Collection.get(config);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      collection.create({
+        id: "root",
+        position: 0,
+        value: { name: "Root" },
+        type: "object",
+      });
+      collection.create({
+        id: "root.a",
+        position: 0,
+        value: { name: "A" },
+        type: "object",
+      });
+      collection.create({
+        id: "root.b",
+        position: 1,
+        value: { name: "B" },
+        type: "object",
+      });
+
+      const rootBefore = collection.getNode<TestValue>("root").data;
+      const nodeA = collection.getNode<TestValue>("root.a");
+      nodeA.move(1);
+
+      const rootAfter = collection.getNode<TestValue>("root").data;
+      expect(rootAfter?.clientUpdatedAt).toBeDefined();
+      expect(rootAfter).not.toBe(rootBefore);
+    });
+  });
+
+  describe("setPosition", () => {
+    it("moves node to a specific index among siblings", async () => {
+      const collection = Collection.get(config);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      collection.create({ id: "root", position: 0, value: { name: "Root" }, type: "object" });
+      collection.create({ id: "root.a", position: 0, value: { name: "A" }, type: "object" });
+      collection.create({ id: "root.b", position: 1, value: { name: "B" }, type: "object" });
+      collection.create({ id: "root.c", position: 2, value: { name: "C" }, type: "object" });
+      collection.create({ id: "root.d", position: 3, value: { name: "D" }, type: "object" });
+
+      // Move A from index 0 to index 2
+      const nodeA = collection.getNode<TestValue>("root.a");
+      nodeA.setPosition(2);
+
+      const root = collection.getNode<TestValue>("root");
+      const children = root.getChildren();
+      expect(children[0].data?.value.name).toBe("B");
+      expect(children[1].data?.value.name).toBe("C");
+      expect(children[2].data?.value.name).toBe("A");
+      expect(children[3].data?.value.name).toBe("D");
+    });
+
+    it("moves node backward (from higher to lower index)", async () => {
+      const collection = Collection.get(config);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      collection.create({ id: "root", position: 0, value: { name: "Root" }, type: "object" });
+      collection.create({ id: "root.a", position: 0, value: { name: "A" }, type: "object" });
+      collection.create({ id: "root.b", position: 1, value: { name: "B" }, type: "object" });
+      collection.create({ id: "root.c", position: 2, value: { name: "C" }, type: "object" });
+
+      // Move C from index 2 to index 0
+      const nodeC = collection.getNode<TestValue>("root.c");
+      nodeC.setPosition(0);
+
+      const root = collection.getNode<TestValue>("root");
+      const children = root.getChildren();
+      expect(children[0].data?.value.name).toBe("C");
+      expect(children[1].data?.value.name).toBe("A");
+      expect(children[2].data?.value.name).toBe("B");
+    });
+
+    it("clamps negative index to 0", async () => {
+      const collection = Collection.get(config);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      collection.create({ id: "root", position: 0, value: { name: "Root" }, type: "object" });
+      collection.create({ id: "root.a", position: 0, value: { name: "A" }, type: "object" });
+      collection.create({ id: "root.b", position: 1, value: { name: "B" }, type: "object" });
+      collection.create({ id: "root.c", position: 2, value: { name: "C" }, type: "object" });
+
+      const nodeC = collection.getNode<TestValue>("root.c");
+      nodeC.setPosition(-5);
+
+      const root = collection.getNode<TestValue>("root");
+      const children = root.getChildren();
+      expect(children[0].data?.value.name).toBe("C");
+      expect(children[1].data?.value.name).toBe("A");
+      expect(children[2].data?.value.name).toBe("B");
+    });
+
+    it("clamps index beyond last to last position", async () => {
+      const collection = Collection.get(config);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      collection.create({ id: "root", position: 0, value: { name: "Root" }, type: "object" });
+      collection.create({ id: "root.a", position: 0, value: { name: "A" }, type: "object" });
+      collection.create({ id: "root.b", position: 1, value: { name: "B" }, type: "object" });
+      collection.create({ id: "root.c", position: 2, value: { name: "C" }, type: "object" });
+
+      const nodeA = collection.getNode<TestValue>("root.a");
+      nodeA.setPosition(100);
+
+      const root = collection.getNode<TestValue>("root");
+      const children = root.getChildren();
+      expect(children[0].data?.value.name).toBe("B");
+      expect(children[1].data?.value.name).toBe("C");
+      expect(children[2].data?.value.name).toBe("A");
+    });
+
+    it("does nothing when target equals current index", async () => {
+      const collection = Collection.get(config);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      collection.create({ id: "root", position: 0, value: { name: "Root" }, type: "object" });
+      collection.create({ id: "root.a", position: 0, value: { name: "A" }, type: "object" });
+      collection.create({ id: "root.b", position: 1, value: { name: "B" }, type: "object" });
+
+      const rootBefore = collection.getNode<TestValue>("root").data;
+      const nodeA = collection.getNode<TestValue>("root.a");
+      nodeA.setPosition(0);
+
+      // Parent should not be touched
+      const rootAfter = collection.getNode<TestValue>("root").data;
+      expect(rootAfter).toBe(rootBefore);
+    });
+
+    it("does nothing for root node", async () => {
+      const collection = Collection.get(config);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      collection.create({ id: "root", position: 0, value: { name: "Root" }, type: "object" });
+
+      const root = collection.getNode<TestValue>("root");
+      root.setPosition(0);
+
+      expect(root.data?.position).toBe(0);
+    });
+
+    it("does nothing for non-existent node", async () => {
+      const collection = Collection.get(config);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      const node = collection.getNode<TestValue>("root.nonexistent");
+      node.setPosition(0);
+
+      // Should not throw
+      expect(node.exists()).toBe(false);
+    });
+
+    it("works with single child (clamped to same index)", async () => {
+      const collection = Collection.get(config);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      collection.create({ id: "root", position: 0, value: { name: "Root" }, type: "object" });
+      collection.create({ id: "root.a", position: 0, value: { name: "A" }, type: "object" });
+
+      const rootBefore = collection.getNode<TestValue>("root").data;
+      const nodeA = collection.getNode<TestValue>("root.a");
+      nodeA.setPosition(5);
+
+      // Clamped to 0 (only child), equals current, so no-op
+      const rootAfter = collection.getNode<TestValue>("root").data;
+      expect(rootAfter).toBe(rootBefore);
+    });
+
+    it("normalizes positions to sequential integers", async () => {
+      const collection = Collection.get(config);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      collection.create({ id: "root", position: 0, value: { name: "Root" }, type: "object" });
+      collection.create({ id: "root.a", position: 10, value: { name: "A" }, type: "object" });
+      collection.create({ id: "root.b", position: 20, value: { name: "B" }, type: "object" });
+      collection.create({ id: "root.c", position: 30, value: { name: "C" }, type: "object" });
+
+      // Move C to index 0, positions should be renumbered 0,1,2
+      const nodeC = collection.getNode<TestValue>("root.c");
+      nodeC.setPosition(0);
+
+      expect(collection.getNode<TestValue>("root.c").data?.position).toBe(0);
+      expect(collection.getNode<TestValue>("root.a").data?.position).toBe(1);
+      expect(collection.getNode<TestValue>("root.b").data?.position).toBe(2);
+    });
+
+    it("bumps parent clientUpdatedAt", async () => {
+      const collection = Collection.get(config);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      collection.create({ id: "root", position: 0, value: { name: "Root" }, type: "object" });
+      collection.create({ id: "root.a", position: 0, value: { name: "A" }, type: "object" });
+      collection.create({ id: "root.b", position: 1, value: { name: "B" }, type: "object" });
+
+      const rootBefore = collection.getNode<TestValue>("root").data;
+      const nodeB = collection.getNode<TestValue>("root.b");
+      nodeB.setPosition(0);
+
+      const rootAfter = collection.getNode<TestValue>("root").data;
+      expect(rootAfter).not.toBe(rootBefore);
+      expect(rootAfter?.clientUpdatedAt).toBeDefined();
     });
   });
 

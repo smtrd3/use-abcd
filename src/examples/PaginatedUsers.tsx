@@ -1,6 +1,6 @@
-import React, { useCallback, useState, useEffect } from "react";
+import React, { useCallback } from "react";
 import { useCrud, type Config } from "../useCrud";
-import { createSyncClient, fetchToSyncResult } from "../runtime";
+import { createSyncClient } from "../runtime/client";
 
 interface User {
   id: string;
@@ -14,90 +14,17 @@ interface UserContext {
   limit: number;
 }
 
-interface PaginationMeta {
-  total: number;
-  hasMore: boolean;
-}
-
-// Store for pagination metadata (shared across renders)
-let paginationMeta: PaginationMeta = { total: 0, hasMore: false };
-const metaListeners: Set<() => void> = new Set();
-
-const notifyMetaListeners = () => {
-  metaListeners.forEach((listener) => listener());
-};
-
 const UsersConfig: Config<User, UserContext> = {
   id: "users-paginated",
   initialContext: {
     page: 1,
     limit: 5,
   },
-  getId: (item) => item.id,
-
   syncDebounce: 300,
   syncRetries: 3,
   cacheCapacity: 10,
   cacheTtl: 60000,
-
-  onFetch: async (context, signal) => {
-    const params = new URLSearchParams({
-      page: String(context.page),
-      limit: String(context.limit),
-    });
-
-    const response = await fetch(`/api/users?${params}`, { signal });
-    const data = await response.json();
-
-    // Store pagination metadata
-    paginationMeta = {
-      total: data.metadata.total,
-      hasMore: data.metadata.hasMore,
-    };
-    notifyMetaListeners();
-
-    return data.items;
-  },
-
-  onSync: createSyncClient<User>({
-    create: async (data, signal) => {
-      return fetchToSyncResult({
-        fetch: fetch("/api/users", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(data),
-          signal,
-        }),
-        parseResponse: async (response) => {
-          const result = await response.json();
-          return { newId: result.id };
-        },
-        parseError: "Failed to create user",
-      });
-    },
-
-    update: async (id, data, signal) => {
-      return fetchToSyncResult({
-        fetch: fetch(`/api/users/${id}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(data),
-          signal,
-        }),
-        parseError: "Failed to update user",
-      });
-    },
-
-    delete: async (id, _data, signal) => {
-      return fetchToSyncResult({
-        fetch: fetch(`/api/users/${id}`, {
-          method: "DELETE",
-          signal,
-        }),
-        parseError: "Failed to delete user",
-      });
-    },
-  }).onSync,
+  handler: createSyncClient<User, UserContext>("/api/users"),
 };
 
 export const PaginatedUsers = React.memo(function PaginatedUsers() {
@@ -105,19 +32,6 @@ export const PaginatedUsers = React.memo(function PaginatedUsers() {
     User,
     UserContext
   >(UsersConfig);
-
-  const [meta, setMeta] = useState<PaginationMeta>({ total: 0, hasMore: false });
-
-  // Subscribe to pagination metadata updates
-  useEffect(() => {
-    const listener = () => setMeta({ ...paginationMeta });
-    metaListeners.add(listener);
-    // Initialize with current value
-    setMeta({ ...paginationMeta });
-    return () => {
-      metaListeners.delete(listener);
-    };
-  }, []);
 
   const users = Array.from(items.values());
 
@@ -150,8 +64,8 @@ export const PaginatedUsers = React.memo(function PaginatedUsers() {
     const email = prompt("Enter user email:");
 
     if (name && email) {
+      // id is auto-generated; pass one explicitly only if needed
       create({
-        id: `temp-${Date.now()}`,
         name,
         email,
         role: "user",
@@ -198,7 +112,7 @@ export const PaginatedUsers = React.memo(function PaginatedUsers() {
             <option value="10">10</option>
             <option value="20">20</option>
           </select>
-          <span className="text-sm text-gray-600">({meta.total} total)</span>
+          <span className="text-sm text-gray-600">({users.length} loaded)</span>
         </div>
 
         <div className="flex gap-2 items-center">
@@ -214,7 +128,7 @@ export const PaginatedUsers = React.memo(function PaginatedUsers() {
           <button
             type="button"
             onClick={nextPage}
-            disabled={!meta.hasMore || loading}
+            disabled={users.length < context.limit || loading}
             className="bg-blue-500 text-white px-3 py-1 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-blue-600"
           >
             Next

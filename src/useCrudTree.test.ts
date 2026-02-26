@@ -18,9 +18,8 @@ describe("useCrudTree", () => {
     config = {
       id: "test-crud-tree",
       initialContext: {},
-      getId: (item) => item.id,
       rootId: "root",
-      onFetch: async () => [],
+      handler: async () => ({ results: [] }),
     };
   });
 

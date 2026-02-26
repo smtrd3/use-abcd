@@ -4,6 +4,7 @@ import { Products } from "./examples/Products";
 import { PaginatedUsers } from "./examples/PaginatedUsers";
 import { OptimisticComments } from "./examples/OptimisticComments";
 import { TreeEditor } from "./examples/TreeEditor";
+import { Benchmark } from "./examples/Benchmark";
 import { Switch, Route, Link } from "wouter";
 
 function App() {
@@ -29,6 +30,9 @@ function App() {
             <Link className={active} to="/tree">
               <span className="text-blue-600 hover:text-blue-800">Tree Editor</span>
             </Link>
+            <Link className={active} to="/benchmark">
+              <span className="text-blue-600 hover:text-blue-800">Benchmark</span>
+            </Link>
           </div>
         </div>
       </nav>
@@ -38,6 +42,7 @@ function App() {
           <Route path="/pagination" component={PaginatedUsers} />
           <Route path="/optimistic" component={OptimisticComments} />
           <Route path="/tree" component={TreeEditor} />
+          <Route path="/benchmark" component={Benchmark} />
         </Switch>
       </div>
     </div>

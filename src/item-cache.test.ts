@@ -19,11 +19,12 @@ describe("Item Cache with WeakMap", () => {
     config = {
       id: "test-item-cache",
       initialContext: {},
-      getId: (item) => item.id,
-      onFetch: async () => [
-        { id: "1", name: "Item 1", value: 100 },
-        { id: "2", name: "Item 2", value: 200 },
-      ],
+      handler: async () => ({
+        results: [
+          { id: "1", name: "Item 1", value: 100 },
+          { id: "2", name: "Item 2", value: 200 },
+        ],
+      }),
     };
   });
 
@@ -112,77 +113,29 @@ describe("Item Cache with WeakMap", () => {
 
       // Create new item
       const newItem: TestItem = { id: "3", name: "Item 3", value: 300 };
-      collection.create(newItem);
+      const createdId = collection.create(newItem);
 
       // Get the created item - should exist in cache
-      const item1 = collection.getItem("3");
-      expect(item1.data).toEqual(newItem);
+      const item1 = collection.getItem(createdId);
+      expect(item1.data?.name).toBe("Item 3");
 
       // Get again - should return same instance (data hasn't changed)
-      const item2 = collection.getItem("3");
+      const item2 = collection.getItem(createdId);
       expect(item1).toBe(item2);
-    });
-
-    it("creates new Item after ID remapping", async () => {
-      const configWithSync: Config<TestItem, TestContext> = {
-        ...config,
-        onSync: async (changes) => {
-          return changes.map((change) => {
-            if (change.type === "create") {
-              // Simulate server assigning permanent ID
-              return {
-                id: change.id,
-                status: "success" as const,
-                newId: `server-${change.id}`,
-              };
-            }
-            return { id: change.id, status: "success" as const };
-          });
-        },
-      };
-
-      const collection = Collection.get(configWithSync);
-
-      // Wait for initial fetch
-      await new Promise((resolve) => setTimeout(resolve, 50));
-
-      // Create item with temp ID
-      const tempItem: TestItem = { id: "temp-123", name: "Temp Item", value: 999 };
-      collection.create(tempItem);
-
-      // Get item with temp ID
-      const itemWithTempId = collection.getItem("temp-123");
-      expect(itemWithTempId.id).toBe("temp-123");
-      expect(itemWithTempId.data?.name).toBe("Temp Item");
-
-      // Wait for sync and ID remapping
-      await new Promise((resolve) => setTimeout(resolve, 400));
-
-      // Temp ID should no longer exist
-      expect(collection.items.has("temp-123")).toBe(false);
-
-      // New ID should exist
-      expect(collection.items.has("server-temp-123")).toBe(true);
-
-      // Get item with new ID - should be a different Item instance
-      const itemWithNewId = collection.getItem("server-temp-123");
-      expect(itemWithNewId.id).toBe("server-temp-123");
-      expect(itemWithNewId.data?.name).toBe("Temp Item");
-
-      // Should be different instances (different data objects after remapping)
-      expect(itemWithTempId).not.toBe(itemWithNewId);
     });
 
     it("returns new Item when data changes via refetch", async () => {
       let fetchCount = 0;
       const dynamicConfig: Config<TestItem, TestContext> = {
         ...config,
-        onFetch: async () => {
+        handler: async () => {
           fetchCount++;
-          return [
-            { id: "1", name: "Item 1", value: fetchCount === 1 ? 100 : 150 },
-            { id: "2", name: "Item 2", value: 200 },
-          ];
+          return {
+            results: [
+              { id: "1", name: "Item 1", value: fetchCount === 1 ? 100 : 150 },
+              { id: "2", name: "Item 2", value: 200 },
+            ],
+          };
         },
       };
 
@@ -396,14 +349,17 @@ describe("Item Cache with WeakMap", () => {
     it("handles context changes correctly", async () => {
       const contextConfig: Config<TestItem, TestContext> = {
         ...config,
-        onFetch: async (context) => {
-          if (context.filter === "high") {
-            return [{ id: "2", name: "Item 2", value: 200 }];
+        handler: async (params) => {
+          const context = params.query;
+          if (context?.filter === "high") {
+            return { results: [{ id: "2", name: "Item 2", value: 200 }] };
           }
-          return [
-            { id: "1", name: "Item 1", value: 100 },
-            { id: "2", name: "Item 2", value: 200 },
-          ];
+          return {
+            results: [
+              { id: "1", name: "Item 1", value: 100 },
+              { id: "2", name: "Item 2", value: 200 },
+            ],
+          };
         },
       };
 

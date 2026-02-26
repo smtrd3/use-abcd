@@ -1,5 +1,6 @@
 import React, { useCallback, useState } from "react";
-import { useCrud, type Config, type SyncResult } from "../useCrud";
+import { useCrud, type Config } from "../useCrud";
+import { createSyncClient } from "../runtime/client";
 
 interface Comment {
   id: string;
@@ -18,72 +19,11 @@ const CommentsConfig: Config<Comment, CommentContext> = {
   initialContext: {
     postId: "1",
   },
-  getId: (item) => item.id,
-
-  // Very short debounce to show optimistic updates quickly
   syncDebounce: 100,
   syncRetries: 3,
   cacheCapacity: 5,
   cacheTtl: 30000,
-
-  onFetch: async (context, signal) => {
-    const params = new URLSearchParams({
-      postId: context.postId,
-    });
-
-    const response = await fetch(`/api/comments?${params}`, { signal });
-    const data = await response.json();
-
-    return data.items;
-  },
-
-  onSync: async (changes, _context, signal) => {
-    const results: SyncResult[] = [];
-
-    for (const change of changes) {
-      try {
-        if (change.type === "create") {
-          const response = await fetch("/api/comments", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(change.data),
-            signal,
-          });
-
-          if (!response.ok) throw new Error("Failed to create comment");
-          const data = await response.json();
-          // Return newId so the library can remap the temporary ID to the server-assigned ID
-          results.push({ id: change.id, status: "success", newId: data.id });
-        } else if (change.type === "update") {
-          const response = await fetch(`/api/comments/${change.id}`, {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(change.data),
-            signal,
-          });
-
-          if (!response.ok) throw new Error("Failed to update comment");
-          results.push({ id: change.id, status: "success" });
-        } else if (change.type === "delete") {
-          const response = await fetch(`/api/comments/${change.id}`, {
-            method: "DELETE",
-            signal,
-          });
-
-          if (!response.ok) throw new Error("Failed to delete comment");
-          results.push({ id: change.id, status: "success" });
-        }
-      } catch (error) {
-        results.push({
-          id: change.id,
-          status: "error",
-          error: error instanceof Error ? error.message : "Unknown error",
-        });
-      }
-    }
-
-    return results;
-  },
+  handler: createSyncClient<Comment, CommentContext>("/api/comments"),
 };
 
 export const OptimisticComments = React.memo(function OptimisticComments() {
@@ -116,8 +56,8 @@ export const OptimisticComments = React.memo(function OptimisticComments() {
     }
 
     // Optimistic create - immediately shows in UI
+    // id is auto-generated; pass one explicitly only if needed
     create({
-      id: `temp-${Date.now()}`,
       postId: "1",
       text: newCommentText,
       author: "You",

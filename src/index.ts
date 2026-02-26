@@ -11,7 +11,7 @@ export { useSyncState } from "./useSyncState";
 export type { UseSyncStateResult } from "./useSyncState";
 
 // Classes
-export { Collection } from "./collection";
+export { Collection, buildServerSnapshot } from "./collection";
 export type { CollectionState } from "./collection";
 export { Item } from "./item";
 export { Node } from "./node";
@@ -25,9 +25,8 @@ export type { FetchHandlerConfig, FetchHandlerState } from "./fetch-handler";
 // Types
 export type {
   Config,
+  CrudHandler,
   Change,
-  SyncResult,
-  IdMapping,
   SyncError,
   ItemStatus,
   SyncQueueState,
@@ -43,31 +42,10 @@ export type {
 } from "./types";
 
 // Sync utilities (Client-side only - server utilities are in use-abcd/runtime/server)
-export {
-  // Shared
-  categorizeResults,
-  // Client
-  createSyncClient,
-  createSyncClientWithStats,
-  createSyncClientFromEndpoint,
-  syncSuccess,
-  syncError,
-  fetchToSyncResult,
-} from "./runtime";
+export { createSyncClient } from "./runtime";
 export type {
-  // Shared
-  SyncHandlerResult,
-  SyncBatchResult,
-  Schema,
   SyncRequestBody,
   SyncResponseBody,
-  // Client
-  CreateHandler,
-  UpdateHandler,
-  DeleteHandler,
-  SyncBuilderConfig,
-  SyncBuilder,
-  FetchToSyncResultOptions,
-  EndpointSyncClientConfig,
-  EndpointSyncClient,
+  ServerRecord,
+  SyncClientConfig,
 } from "./runtime";

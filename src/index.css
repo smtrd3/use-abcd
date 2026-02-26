@@ -1,9 +1,9 @@
 @import "tailwindcss";
 
 body {
-  font-family: "Nunito Sans", sans-serif;
+  font-family: "Recursive", sans-serif;
 }
 
 @theme {
-  --font-sans: "Nunito Sans", sans-serif;
+  --font-sans: "Recursive", sans-serif;
 }
