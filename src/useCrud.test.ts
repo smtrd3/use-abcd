@@ -171,9 +171,7 @@ describe("useCrud", () => {
         return React.createElement(
           "ul",
           null,
-          ...itemArray.map((item) =>
-            React.createElement("li", { key: item.id }, item.name),
-          ),
+          ...itemArray.map((item) => React.createElement("li", { key: item.id }, item.name)),
         );
       }
 

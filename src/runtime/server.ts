@@ -13,22 +13,16 @@ export type CrudHandler<T, Q = unknown> = (request: {
 
 export type FetchResult<T, S = unknown> = T[] | { items: T[]; serverState?: S };
 
-export type SyncServerConfig<
-  T extends { id: string },
-  Q = unknown,
-  S = unknown,
-> = {
+export type SyncServerConfig<T extends { id: string }, Q = unknown, S = unknown> = {
   fetch?: (params: { scope?: string; query: Q }) => Promise<FetchResult<T, S>> | FetchResult<T, S>;
   create?: (record: ServerRecord<T>) => Promise<void> | void;
   update?: (record: ServerRecord<T>) => Promise<void> | void;
   remove?: (record: ServerRecord<T>) => Promise<void> | void;
 };
 
-export function createCrudHandler<
-  T extends { id: string },
-  Q = unknown,
-  S = unknown,
->(config: SyncServerConfig<T, Q, S>): CrudHandler<T, Q> {
+export function createCrudHandler<T extends { id: string }, Q = unknown, S = unknown>(
+  config: SyncServerConfig<T, Q, S>,
+): CrudHandler<T, Q> {
   return async (request) => {
     const response: SyncResponseBody<T> = {};
     const serverTimeStamp = ulid();
@@ -56,10 +50,13 @@ export function createCrudHandler<
             }
             return [change.id, { status: "success" }];
           } catch (error) {
-            return [change.id, {
-              status: "error",
-              error: error instanceof Error ? error.message : "Unknown error",
-            }];
+            return [
+              change.id,
+              {
+                status: "error",
+                error: error instanceof Error ? error.message : "Unknown error",
+              },
+            ];
           }
         }),
       );

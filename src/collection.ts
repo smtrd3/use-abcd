@@ -26,7 +26,9 @@ export type CollectionState<T, C> = {
   fetchError?: string;
 };
 
-export function buildServerSnapshot<T extends { id: string }, C>(config: Config<T, C>): CollectionState<T, C> {
+export function buildServerSnapshot<T extends { id: string }, C>(
+  config: Config<T, C>,
+): CollectionState<T, C> {
   const items = new Map<string, T>();
   if (config.serverItems) {
     for (const item of config.serverItems) {
@@ -39,7 +41,13 @@ export function buildServerSnapshot<T extends { id: string }, C>(config: Config<
     syncState: "idle",
     loading: false,
     syncing: false,
-    syncQueue: { queue: new Map(), inFlight: new Map(), errors: new Map(), isSyncing: false, isPaused: false },
+    syncQueue: {
+      queue: new Map(),
+      inFlight: new Map(),
+      errors: new Map(),
+      isSyncing: false,
+      isPaused: false,
+    },
     fetchStatus: "idle",
     fetchError: undefined,
   };

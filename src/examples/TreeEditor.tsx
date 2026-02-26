@@ -68,10 +68,7 @@ const TreeNodeItem = React.memo(function TreeNodeItem({
   const { data, isSelected, select, children } = useNode<FileData, FileContext>(node);
 
   const renderedChildren = useMemo(
-    () =>
-      children.map((child) => (
-        <TreeNodeItem key={child.id} node={child} depth={depth + 1} />
-      )),
+    () => children.map((child) => <TreeNodeItem key={child.id} node={child} depth={depth + 1} />),
     [children, depth],
   );
 

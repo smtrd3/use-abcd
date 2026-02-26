@@ -95,7 +95,9 @@ describe("Collection E2E with MSW and createSyncServer", () => {
     createSyncServer<User, UserQuery>(
       createCrudHandler<User, UserQuery>({
         fetch: ({ query }) => db.query(query),
-        create: (record) => { db.create(record.data); },
+        create: (record) => {
+          db.create(record.data);
+        },
         update: (record) => {
           const user = db.update(record.data.id, record.data);
           if (!user) throw new Error("User not found");
@@ -803,9 +805,7 @@ describe("Collection E2E with MSW and createSyncServer", () => {
     it("allows manual refresh after serverItems initialization", async () => {
       const config = createConfig({
         id: `server-items-refresh-${Date.now()}`,
-        serverItems: [
-          { id: "s1", name: "Stale User", email: "s1@example.com", role: "user" },
-        ],
+        serverItems: [{ id: "s1", name: "Stale User", email: "s1@example.com", role: "user" }],
       });
 
       const collection = Collection.get(config);

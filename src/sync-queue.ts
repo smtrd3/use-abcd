@@ -7,7 +7,11 @@ export type SyncQueueConfig<T, C = unknown> = {
   maxRetries: number;
   batchSize?: number;
   getContext?: () => C;
-  onSync: (changes: Change<T>[], context: C, signal: AbortSignal) => Promise<Record<string, Result>>;
+  onSync: (
+    changes: Change<T>[],
+    context: C,
+    signal: AbortSignal,
+  ) => Promise<Record<string, Result>>;
 };
 
 /**

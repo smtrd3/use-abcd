@@ -43,9 +43,4 @@ export type {
 
 // Sync utilities (Client-side only - server utilities are in use-abcd/runtime/server)
 export { createSyncClient } from "./runtime";
-export type {
-  SyncRequestBody,
-  SyncResponseBody,
-  ServerRecord,
-  SyncClientConfig,
-} from "./runtime";
+export type { SyncRequestBody, SyncResponseBody, ServerRecord, SyncClientConfig } from "./runtime";

@@ -20,7 +20,10 @@ const mockItems: TestItem[] = [
   { id: "3", name: "Item 3" },
 ];
 
-const createRequest = <T, Q>(body: { query?: Q; changes?: Array<{ id: string; type: string; data: T }> }, method = "POST"): Request => {
+const createRequest = <T, Q>(
+  body: { query?: Q; changes?: Array<{ id: string; type: string; data: T }> },
+  method = "POST",
+): Request => {
   return new Request("http://localhost/api/items", {
     method,
     headers: { "Content-Type": "application/json" },
@@ -138,9 +141,7 @@ describe("createSyncServer", () => {
 
       await handler(request);
 
-      expect(crudHandler).toHaveBeenCalledWith(
-        expect.objectContaining({ query }),
-      );
+      expect(crudHandler).toHaveBeenCalledWith(expect.objectContaining({ query }));
     });
 
     it("handles async handler", async () => {
@@ -243,7 +244,9 @@ describe("createSyncServer", () => {
       const body = await response.json();
 
       expect(Object.keys(body.syncResults)).toHaveLength(3);
-      expect(Object.values(body.syncResults).every((r: Result) => r.status === "success")).toBe(true);
+      expect(Object.values(body.syncResults).every((r: Result) => r.status === "success")).toBe(
+        true,
+      );
     });
 
     it("handles mixed operation types", async () => {
@@ -269,7 +272,9 @@ describe("createSyncServer", () => {
       const body = await response.json();
 
       expect(Object.keys(body.syncResults)).toHaveLength(3);
-      expect(Object.values(body.syncResults).every((r: Result) => r.status === "success")).toBe(true);
+      expect(Object.values(body.syncResults).every((r: Result) => r.status === "success")).toBe(
+        true,
+      );
     });
 
     it("continues processing after individual failures", async () => {
@@ -503,7 +508,9 @@ describe("createSyncServer", () => {
       const body = await response.json();
 
       expect(Object.keys(body.syncResults)).toHaveLength(100);
-      expect(Object.values(body.syncResults).every((r: Result) => r.status === "success")).toBe(true);
+      expect(Object.values(body.syncResults).every((r: Result) => r.status === "success")).toBe(
+        true,
+      );
     });
   });
 });
@@ -740,8 +747,12 @@ describe("createCrudHandler", () => {
     it("generates same serverTimeStamp for all records in a batch", async () => {
       const timestamps: string[] = [];
       const handler = createCrudHandler<TestItem, TestQuery>({
-        create: (record) => { timestamps.push(record.serverTimeStamp); },
-        update: (record) => { timestamps.push(record.serverTimeStamp); },
+        create: (record) => {
+          timestamps.push(record.serverTimeStamp);
+        },
+        update: (record) => {
+          timestamps.push(record.serverTimeStamp);
+        },
       });
 
       await handler({
@@ -760,7 +771,9 @@ describe("createCrudHandler", () => {
     it("wraps change data into ServerRecord format", async () => {
       let capturedRecord: unknown = null;
       const handler = createCrudHandler<TestItem, TestQuery>({
-        create: (record) => { capturedRecord = record; },
+        create: (record) => {
+          capturedRecord = record;
+        },
       });
 
       await handler({
@@ -778,7 +791,9 @@ describe("createCrudHandler", () => {
     it("sets deleted flag for delete changes", async () => {
       let capturedRecord: unknown = null;
       const handler = createCrudHandler<TestItem, TestQuery>({
-        remove: (record) => { capturedRecord = record; },
+        remove: (record) => {
+          capturedRecord = record;
+        },
       });
 
       await handler({

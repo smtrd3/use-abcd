@@ -29,9 +29,10 @@ function makeConfig(count: number): Config<Address, AddressContext> {
   };
 }
 
-const configs = Object.fromEntries(
-  ITEM_COUNTS.map((c) => [c, makeConfig(c)]),
-) as Record<(typeof ITEM_COUNTS)[number], Config<Address, AddressContext>>;
+const configs = Object.fromEntries(ITEM_COUNTS.map((c) => [c, makeConfig(c)])) as Record<
+  (typeof ITEM_COUNTS)[number],
+  Config<Address, AddressContext>
+>;
 
 // --- Individual address row ---
 
@@ -124,8 +125,10 @@ export const Benchmark = React.memo(function Benchmark() {
 
   const config = configs[count];
 
-  const { items, loading, syncing, syncQueue, getItem, refresh, remove } =
-    useCrud<Address, AddressContext>(config);
+  const { items, loading, syncing, syncQueue, getItem, refresh, remove } = useCrud<
+    Address,
+    AddressContext
+  >(config);
 
   const handleSelect = useCallback((id: string) => {
     setSelectedId((prev) => (prev === id ? null : id));
@@ -229,7 +232,9 @@ export const Benchmark = React.memo(function Benchmark() {
 
       {/* Table */}
       {loading && addressList.length === 0 ? (
-        <div className="text-center py-12 text-gray-500">Loading {count.toLocaleString()} addresses...</div>
+        <div className="text-center py-12 text-gray-500">
+          Loading {count.toLocaleString()} addresses...
+        </div>
       ) : (
         <div className="border rounded overflow-auto max-h-[600px]">
           <table className="w-full">

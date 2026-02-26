@@ -55,9 +55,7 @@ describe("createSyncClient", () => {
   });
 
   it("accepts string endpoint config", async () => {
-    mockFetch.mockResolvedValue(
-      new Response(JSON.stringify({ syncResults: {} }), { status: 200 }),
-    );
+    mockFetch.mockResolvedValue(new Response(JSON.stringify({ syncResults: {} }), { status: 200 }));
 
     const handler = createSyncClient<TestItem>("/api/items/sync");
     await handler({ changes: [] }, new AbortController().signal);
@@ -66,9 +64,7 @@ describe("createSyncClient", () => {
   });
 
   it("accepts object config with custom headers", async () => {
-    mockFetch.mockResolvedValue(
-      new Response(JSON.stringify({ syncResults: {} }), { status: 200 }),
-    );
+    mockFetch.mockResolvedValue(new Response(JSON.stringify({ syncResults: {} }), { status: 200 }));
 
     const handler = createSyncClient<TestItem>({
       endpoint: "/api/sync",
@@ -221,9 +217,9 @@ describe("createSyncClient", () => {
 
       const handler = createSyncClient<TestItem, { page: number }>("/api/sync");
 
-      await expect(
-        handler({ query: { page: 1 } }, new AbortController().signal),
-      ).rejects.toThrow("Server error");
+      await expect(handler({ query: { page: 1 } }, new AbortController().signal)).rejects.toThrow(
+        "Server error",
+      );
     });
 
     it("throws default error when response has no error field", async () => {
@@ -231,9 +227,9 @@ describe("createSyncClient", () => {
 
       const handler = createSyncClient<TestItem, { page: number }>("/api/sync");
 
-      await expect(
-        handler({ query: { page: 1 } }, new AbortController().signal),
-      ).rejects.toThrow("Request failed");
+      await expect(handler({ query: { page: 1 } }, new AbortController().signal)).rejects.toThrow(
+        "Request failed",
+      );
     });
 
     it("handles network errors", async () => {
@@ -241,9 +237,9 @@ describe("createSyncClient", () => {
 
       const handler = createSyncClient<TestItem, { page: number }>("/api/sync");
 
-      await expect(
-        handler({ query: { page: 1 } }, new AbortController().signal),
-      ).rejects.toThrow("Network failure");
+      await expect(handler({ query: { page: 1 } }, new AbortController().signal)).rejects.toThrow(
+        "Network failure",
+      );
     });
 
     it("handles abort errors", async () => {
@@ -253,9 +249,7 @@ describe("createSyncClient", () => {
 
       const handler = createSyncClient<TestItem, { page: number }>("/api/sync");
 
-      await expect(
-        handler({ query: { page: 1 } }, new AbortController().signal),
-      ).rejects.toThrow();
+      await expect(handler({ query: { page: 1 } }, new AbortController().signal)).rejects.toThrow();
     });
 
     it("uses custom headers", async () => {
