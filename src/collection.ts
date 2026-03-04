@@ -65,11 +65,11 @@ export class Collection<T extends { id: string }, C> {
   }
 
   static clear(id: string): void {
-    Collection._cache.delete(id);
+    Collection._cache.get(id)?.destroy();
   }
 
   static clearAll(): void {
-    Collection._cache.clear();
+    Collection._cache.forEach((c) => c.destroy());
   }
 
   static getById<T extends { id: string }, C>(id: string): Collection<T, C> | undefined {
