@@ -10,6 +10,7 @@ export default defineConfig({
       provider: "v8",
       reporter: ["clover", "lcov", "text"],
       include: ["src"],
+      exclude: ["src/mocks", "src/examples", "src/__tests__"],
     },
     typecheck: {
       enabled: true,
