@@ -179,7 +179,12 @@ describe("createSyncServer", () => {
         if (request.changes) {
           const syncResults: Result[] = [];
           for (const change of request.changes) {
-            syncResults.push({ status: "success", id: change.data.id, type: change.type, serverSyncedAt: "test" });
+            syncResults.push({
+              status: "success",
+              id: change.data.id,
+              type: change.type,
+              serverSyncedAt: "test",
+            });
           }
           return { syncResults, serverSyncedAt: "test" };
         }
@@ -237,7 +242,12 @@ describe("createSyncServer", () => {
         if (request.changes) {
           const syncResults: Result[] = [];
           for (const change of request.changes) {
-            syncResults.push({ status: "success", id: change.data.id, type: change.type, serverSyncedAt: "test" });
+            syncResults.push({
+              status: "success",
+              id: change.data.id,
+              type: change.type,
+              serverSyncedAt: "test",
+            });
           }
           return { syncResults, serverSyncedAt: "test" };
         }
@@ -263,7 +273,12 @@ describe("createSyncServer", () => {
         if (request.changes) {
           const syncResults: Result[] = [];
           for (const change of request.changes) {
-            syncResults.push({ status: "success", id: change.data.id, type: change.type, serverSyncedAt: "test" });
+            syncResults.push({
+              status: "success",
+              id: change.data.id,
+              type: change.type,
+              serverSyncedAt: "test",
+            });
           }
           return { syncResults, serverSyncedAt: "test" };
         }
@@ -298,7 +313,12 @@ describe("createSyncServer", () => {
                 error: "Failed",
               });
             } else {
-              syncResults.push({ status: "success", id: change.data.id, type: change.type, serverSyncedAt: "test" });
+              syncResults.push({
+                status: "success",
+                id: change.data.id,
+                type: change.type,
+                serverSyncedAt: "test",
+              });
             }
           }
           return { syncResults, serverSyncedAt: "test" };
@@ -336,7 +356,12 @@ describe("createSyncServer", () => {
         if (request.changes) {
           const syncResults: Result[] = [];
           for (const change of request.changes) {
-            syncResults.push({ status: "success", id: change.data.id, type: change.type, serverSyncedAt: "test" });
+            syncResults.push({
+              status: "success",
+              id: change.data.id,
+              type: change.type,
+              serverSyncedAt: "test",
+            });
           }
           response.syncResults = syncResults;
         }
@@ -375,7 +400,12 @@ describe("createSyncServer", () => {
         if (request.changes) {
           const syncResults: Result[] = [];
           for (const change of request.changes) {
-            syncResults.push({ status: "success", id: change.data.id, type: change.type, serverSyncedAt: "test" });
+            syncResults.push({
+              status: "success",
+              id: change.data.id,
+              type: change.type,
+              serverSyncedAt: "test",
+            });
           }
           return { syncResults, serverSyncedAt: "test" };
         }
@@ -504,7 +534,12 @@ describe("createSyncServer", () => {
         if (request.changes) {
           const syncResults: Result[] = [];
           for (const change of request.changes) {
-            syncResults.push({ status: "success", id: change.data.id, type: change.type, serverSyncedAt: "test" });
+            syncResults.push({
+              status: "success",
+              id: change.data.id,
+              type: change.type,
+              serverSyncedAt: "test",
+            });
           }
           return { syncResults, serverSyncedAt: "test" };
         }

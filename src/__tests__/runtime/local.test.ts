@@ -114,9 +114,7 @@ describe("createLocalSyncClient", () => {
       // Delete one item
       await client.handler(
         {
-          changes: [
-            { id: "1", type: "delete", data: { id: "1", name: "Alice" } },
-          ],
+          changes: [{ id: "1", type: "delete", data: { id: "1", name: "Alice" } }],
         },
         signal,
       );
@@ -130,7 +128,11 @@ describe("createLocalSyncClient", () => {
 
     it("fetches from remote when online and endpoint configured (cache-first)", async () => {
       // Mock navigator.onLine
-      Object.defineProperty(navigator, "onLine", { value: true, writable: true, configurable: true });
+      Object.defineProperty(navigator, "onLine", {
+        value: true,
+        writable: true,
+        configurable: true,
+      });
 
       mockFetch.mockImplementation(() =>
         Promise.resolve(
@@ -179,7 +181,11 @@ describe("createLocalSyncClient", () => {
     });
 
     it("uses updated lastSyncedAt on subsequent fetches", async () => {
-      Object.defineProperty(navigator, "onLine", { value: true, writable: true, configurable: true });
+      Object.defineProperty(navigator, "onLine", {
+        value: true,
+        writable: true,
+        configurable: true,
+      });
 
       // First fetch
       mockFetch.mockResolvedValueOnce(
@@ -226,7 +232,11 @@ describe("createLocalSyncClient", () => {
     });
 
     it("returns local data when offline", async () => {
-      Object.defineProperty(navigator, "onLine", { value: false, writable: true, configurable: true });
+      Object.defineProperty(navigator, "onLine", {
+        value: false,
+        writable: true,
+        configurable: true,
+      });
 
       const client = createLocalSyncClient<TestItem>({
         dbName,
@@ -237,9 +247,7 @@ describe("createLocalSyncClient", () => {
       // Add local data first
       await client.handler(
         {
-          changes: [
-            { id: "1", type: "create", data: { id: "1", name: "Local" } },
-          ],
+          changes: [{ id: "1", type: "create", data: { id: "1", name: "Local" } }],
         },
         signal,
       );
@@ -252,11 +260,19 @@ describe("createLocalSyncClient", () => {
       expect(result.items![0].name).toBe("Local");
 
       await client.destroy();
-      Object.defineProperty(navigator, "onLine", { value: true, writable: true, configurable: true });
+      Object.defineProperty(navigator, "onLine", {
+        value: true,
+        writable: true,
+        configurable: true,
+      });
     });
 
     it("falls back to local data when remote fetch fails", async () => {
-      Object.defineProperty(navigator, "onLine", { value: true, writable: true, configurable: true });
+      Object.defineProperty(navigator, "onLine", {
+        value: true,
+        writable: true,
+        configurable: true,
+      });
 
       mockFetch.mockRejectedValue(new Error("Network error"));
 
@@ -269,9 +285,7 @@ describe("createLocalSyncClient", () => {
       // Add local data
       await client.handler(
         {
-          changes: [
-            { id: "1", type: "create", data: { id: "1", name: "Local" } },
-          ],
+          changes: [{ id: "1", type: "create", data: { id: "1", name: "Local" } }],
         },
         signal,
       );
@@ -296,9 +310,7 @@ describe("createLocalSyncClient", () => {
 
       const result = await client.handler(
         {
-          changes: [
-            { id: "1", type: "create", data: { id: "1", name: "New" } },
-          ],
+          changes: [{ id: "1", type: "create", data: { id: "1", name: "New" } }],
         },
         signal,
       );
@@ -324,9 +336,7 @@ describe("createLocalSyncClient", () => {
       // Create
       await client.handler(
         {
-          changes: [
-            { id: "1", type: "create", data: { id: "1", name: "Created" } },
-          ],
+          changes: [{ id: "1", type: "create", data: { id: "1", name: "Created" } }],
         },
         signal,
       );
@@ -334,9 +344,7 @@ describe("createLocalSyncClient", () => {
       // Update
       await client.handler(
         {
-          changes: [
-            { id: "1", type: "update", data: { id: "1", name: "Updated" } },
-          ],
+          changes: [{ id: "1", type: "update", data: { id: "1", name: "Updated" } }],
         },
         signal,
       );
@@ -352,9 +360,7 @@ describe("createLocalSyncClient", () => {
       // Delete
       await client.handler(
         {
-          changes: [
-            { id: "1", type: "delete", data: { id: "1", name: "Updated" } },
-          ],
+          changes: [{ id: "1", type: "delete", data: { id: "1", name: "Updated" } }],
         },
         signal,
       );
@@ -394,14 +400,20 @@ describe("createLocalSyncClient", () => {
     });
 
     it("enqueues to SyncQueue when online with remote", async () => {
-      Object.defineProperty(navigator, "onLine", { value: true, writable: true, configurable: true });
+      Object.defineProperty(navigator, "onLine", {
+        value: true,
+        writable: true,
+        configurable: true,
+      });
 
       // Each call needs a fresh Response (body can only be consumed once)
       mockFetch.mockImplementation(() =>
         Promise.resolve(
           new Response(
             JSON.stringify({
-              syncResults: [{ status: "success", id: "1", type: "create", serverSyncedAt: "01ABC" }],
+              syncResults: [
+                { status: "success", id: "1", type: "create", serverSyncedAt: "01ABC" },
+              ],
               serverSyncedAt: "01ABC",
             }),
             { status: 200 },
@@ -418,9 +430,7 @@ describe("createLocalSyncClient", () => {
 
       await client.handler(
         {
-          changes: [
-            { id: "1", type: "create", data: { id: "1", name: "New" } },
-          ],
+          changes: [{ id: "1", type: "create", data: { id: "1", name: "New" } }],
         },
         signal,
       );
@@ -439,7 +449,11 @@ describe("createLocalSyncClient", () => {
     });
 
     it("does not enqueue when offline", async () => {
-      Object.defineProperty(navigator, "onLine", { value: false, writable: true, configurable: true });
+      Object.defineProperty(navigator, "onLine", {
+        value: false,
+        writable: true,
+        configurable: true,
+      });
 
       const client = createLocalSyncClient<TestItem>({
         dbName,
@@ -450,9 +464,7 @@ describe("createLocalSyncClient", () => {
 
       await client.handler(
         {
-          changes: [
-            { id: "1", type: "create", data: { id: "1", name: "Offline" } },
-          ],
+          changes: [{ id: "1", type: "create", data: { id: "1", name: "Offline" } }],
         },
         signal,
       );
@@ -463,7 +475,11 @@ describe("createLocalSyncClient", () => {
       expect(mockFetch).not.toHaveBeenCalled();
 
       await client.destroy();
-      Object.defineProperty(navigator, "onLine", { value: true, writable: true, configurable: true });
+      Object.defineProperty(navigator, "onLine", {
+        value: true,
+        writable: true,
+        configurable: true,
+      });
     });
   });
 
@@ -473,7 +489,11 @@ describe("createLocalSyncClient", () => {
 
   describe("offline to online reconnection", () => {
     it("re-enqueues unsynced records on online event", async () => {
-      Object.defineProperty(navigator, "onLine", { value: false, writable: true, configurable: true });
+      Object.defineProperty(navigator, "onLine", {
+        value: false,
+        writable: true,
+        configurable: true,
+      });
 
       mockFetch.mockImplementation(() =>
         Promise.resolve(
@@ -519,7 +539,11 @@ describe("createLocalSyncClient", () => {
       db.close();
 
       // Go online
-      Object.defineProperty(navigator, "onLine", { value: true, writable: true, configurable: true });
+      Object.defineProperty(navigator, "onLine", {
+        value: true,
+        writable: true,
+        configurable: true,
+      });
       window.dispatchEvent(new Event("online"));
 
       // Wait for debounce + sync
@@ -570,13 +594,19 @@ describe("createLocalSyncClient", () => {
     });
 
     it("pause and resume control the SyncQueue", async () => {
-      Object.defineProperty(navigator, "onLine", { value: true, writable: true, configurable: true });
+      Object.defineProperty(navigator, "onLine", {
+        value: true,
+        writable: true,
+        configurable: true,
+      });
 
       mockFetch.mockImplementation(() =>
         Promise.resolve(
           new Response(
             JSON.stringify({
-              syncResults: [{ status: "success", id: "1", type: "create", serverSyncedAt: "01ABC" }],
+              syncResults: [
+                { status: "success", id: "1", type: "create", serverSyncedAt: "01ABC" },
+              ],
               serverSyncedAt: "01ABC",
             }),
             { status: 200 },
@@ -596,9 +626,7 @@ describe("createLocalSyncClient", () => {
       const signal = new AbortController().signal;
       await client.handler(
         {
-          changes: [
-            { id: "1", type: "create", data: { id: "1", name: "Paused" } },
-          ],
+          changes: [{ id: "1", type: "create", data: { id: "1", name: "Paused" } }],
         },
         signal,
       );
@@ -630,9 +658,7 @@ describe("createLocalSyncClient", () => {
       // Add items
       await client.handler(
         {
-          changes: [
-            { id: "1", type: "create", data: { id: "1", name: "Alice" } },
-          ],
+          changes: [{ id: "1", type: "create", data: { id: "1", name: "Alice" } }],
         },
         signal,
       );
@@ -678,7 +704,11 @@ describe("createLocalSyncClient", () => {
 
   describe("abort signal", () => {
     it("returns local data even when signal is aborted (background sync fails silently)", async () => {
-      Object.defineProperty(navigator, "onLine", { value: true, writable: true, configurable: true });
+      Object.defineProperty(navigator, "onLine", {
+        value: true,
+        writable: true,
+        configurable: true,
+      });
 
       mockFetch.mockRejectedValue(new Error("aborted"));
 
@@ -691,9 +721,7 @@ describe("createLocalSyncClient", () => {
       // Seed local data
       await client.handler(
         {
-          changes: [
-            { id: "1", type: "create", data: { id: "1", name: "Local" } },
-          ],
+          changes: [{ id: "1", type: "create", data: { id: "1", name: "Local" } }],
         },
         signal,
       );
@@ -716,7 +744,11 @@ describe("createLocalSyncClient", () => {
 
   describe("delete cleanup", () => {
     it("removes deleted records from IDB after successful server sync", async () => {
-      Object.defineProperty(navigator, "onLine", { value: true, writable: true, configurable: true });
+      Object.defineProperty(navigator, "onLine", {
+        value: true,
+        writable: true,
+        configurable: true,
+      });
 
       mockFetch.mockImplementation(() =>
         Promise.resolve(
@@ -760,7 +792,9 @@ describe("createLocalSyncClient", () => {
         Promise.resolve(
           new Response(
             JSON.stringify({
-              syncResults: [{ status: "success", id: "1", type: "delete", serverSyncedAt: "01DEF" }],
+              syncResults: [
+                { status: "success", id: "1", type: "delete", serverSyncedAt: "01DEF" },
+              ],
               serverSyncedAt: "01DEF",
             }),
             { status: 200 },
@@ -770,9 +804,7 @@ describe("createLocalSyncClient", () => {
 
       await client.handler(
         {
-          changes: [
-            { id: "1", type: "delete", data: { id: "1", name: "Alice" } },
-          ],
+          changes: [{ id: "1", type: "delete", data: { id: "1", name: "Alice" } }],
         },
         signal,
       );
@@ -801,7 +833,11 @@ describe("createLocalSyncClient", () => {
 
   describe("collection refresh on server sync", () => {
     it("refreshes collection when collectionId is set and syncFromRemote stores items", async () => {
-      Object.defineProperty(navigator, "onLine", { value: true, writable: true, configurable: true });
+      Object.defineProperty(navigator, "onLine", {
+        value: true,
+        writable: true,
+        configurable: true,
+      });
 
       mockFetch.mockImplementation(() =>
         Promise.resolve(
@@ -841,7 +877,11 @@ describe("createLocalSyncClient", () => {
     });
 
     it("does not refresh when collectionId is not set", async () => {
-      Object.defineProperty(navigator, "onLine", { value: true, writable: true, configurable: true });
+      Object.defineProperty(navigator, "onLine", {
+        value: true,
+        writable: true,
+        configurable: true,
+      });
 
       mockFetch.mockImplementation(() =>
         Promise.resolve(
@@ -879,7 +919,11 @@ describe("createLocalSyncClient", () => {
 
   describe("metadata store", () => {
     it("stores lastSyncedAt as generic record with id and value", async () => {
-      Object.defineProperty(navigator, "onLine", { value: true, writable: true, configurable: true });
+      Object.defineProperty(navigator, "onLine", {
+        value: true,
+        writable: true,
+        configurable: true,
+      });
 
       mockFetch.mockImplementation(() =>
         Promise.resolve(

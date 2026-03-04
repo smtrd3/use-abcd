@@ -24,7 +24,9 @@ describe("createSyncClient", () => {
       { id: "1", type: "create", status: "success", serverSyncedAt: "test" },
       { id: "2", type: "update", status: "success", serverSyncedAt: "test" },
     ];
-    mockFetch.mockResolvedValue(new Response(JSON.stringify({ syncResults, serverSyncedAt: "test" }), { status: 200 }));
+    mockFetch.mockResolvedValue(
+      new Response(JSON.stringify({ syncResults, serverSyncedAt: "test" }), { status: 200 }),
+    );
 
     const handler = createSyncClient<TestItem>("/api/sync");
     const signal = new AbortController().signal;
@@ -54,7 +56,9 @@ describe("createSyncClient", () => {
   });
 
   it("accepts string endpoint config", async () => {
-    mockFetch.mockResolvedValue(new Response(JSON.stringify({ syncResults: [], serverSyncedAt: "" }), { status: 200 }));
+    mockFetch.mockResolvedValue(
+      new Response(JSON.stringify({ syncResults: [], serverSyncedAt: "" }), { status: 200 }),
+    );
 
     const handler = createSyncClient<TestItem>("/api/items/sync");
     await handler({ changes: [] }, new AbortController().signal);
@@ -63,7 +67,9 @@ describe("createSyncClient", () => {
   });
 
   it("accepts object config with custom headers", async () => {
-    mockFetch.mockResolvedValue(new Response(JSON.stringify({ syncResults: [], serverSyncedAt: "" }), { status: 200 }));
+    mockFetch.mockResolvedValue(
+      new Response(JSON.stringify({ syncResults: [], serverSyncedAt: "" }), { status: 200 }),
+    );
 
     const handler = createSyncClient<TestItem>({
       endpoint: "/api/sync",
@@ -201,7 +207,9 @@ describe("createSyncClient", () => {
     });
 
     it("returns empty object when items is missing from response", async () => {
-      mockFetch.mockResolvedValue(new Response(JSON.stringify({ serverSyncedAt: "" }), { status: 200 }));
+      mockFetch.mockResolvedValue(
+        new Response(JSON.stringify({ serverSyncedAt: "" }), { status: 200 }),
+      );
 
       const handler = createSyncClient<TestItem, { page: number }>("/api/sync");
       const result = await handler({ query: { page: 1 } }, new AbortController().signal);
@@ -252,7 +260,9 @@ describe("createSyncClient", () => {
     });
 
     it("uses custom headers", async () => {
-      mockFetch.mockResolvedValue(new Response(JSON.stringify({ items: [], serverSyncedAt: "" }), { status: 200 }));
+      mockFetch.mockResolvedValue(
+        new Response(JSON.stringify({ items: [], serverSyncedAt: "" }), { status: 200 }),
+      );
 
       const handler = createSyncClient<TestItem, { page: number }>({
         endpoint: "/api/sync",

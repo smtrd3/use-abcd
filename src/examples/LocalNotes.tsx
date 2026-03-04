@@ -24,16 +24,16 @@ const NotesConfig: Config<Note, Record<string, never>> = {
 };
 
 export const LocalNotes = React.memo(function LocalNotes() {
-  const { items, loading, create, update, remove } = useCrud<Note, Record<string, never>>(NotesConfig);
+  const { items, loading, create, update, remove } = useCrud<Note, Record<string, never>>(
+    NotesConfig,
+  );
   const syncState = useLocalSyncState("local-notes", localClient);
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState("");
   const [editBody, setEditBody] = useState("");
 
-  const notes = Array.from(items.values()).sort(
-    (a, b) => b.updatedAt.localeCompare(a.updatedAt),
-  );
+  const notes = Array.from(items.values()).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 
   const handleCreate = useCallback(() => {
     create({
@@ -78,9 +78,7 @@ export const LocalNotes = React.memo(function LocalNotes() {
         <div className="flex justify-between items-center">
           <div className="flex gap-4 text-sm">
             <span>{notes.length} notes</span>
-            {syncState.isSyncing && (
-              <span className="text-blue-600">Syncing to server...</span>
-            )}
+            {syncState.isSyncing && <span className="text-blue-600">Syncing to server...</span>}
             {syncState.queue.size > 0 && !syncState.isSyncing && (
               <span className="text-yellow-600">{syncState.queue.size} pending</span>
             )}

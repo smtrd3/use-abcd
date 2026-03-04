@@ -173,7 +173,10 @@ export function createLocalSyncClient<T extends { id: string }>(config: LocalSyn
     // Mark successful non-delete changes not in response.items as synced
     const returnedIds = new Set(map(response.items ?? [], (r) => r.id));
     const extraIds = map(
-      filter(syncResults, (r) => r.status === "success" && r.type !== "delete" && !returnedIds.has(r.id)),
+      filter(
+        syncResults,
+        (r) => r.status === "success" && r.type !== "delete" && !returnedIds.has(r.id),
+      ),
       (r) => r.id,
     );
     if (size(extraIds) > 0) {

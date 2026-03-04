@@ -101,18 +101,16 @@ export class Collection<T extends { id: string }, C> {
       : async () => [] as T[];
 
     const syncFn = config.handler
-      ? (changes: Change<T>[], _ctx: C, signal: AbortSignal) =>
-          config.handler!({ changes }, signal)
-      : async (changes: Change<T>[]) =>
-          ({
-            syncResults: map(changes, (c) => ({
-              status: "success" as const,
-              id: c.id,
-              type: c.type,
-              serverSyncedAt: "",
-            })),
+      ? (changes: Change<T>[], _ctx: C, signal: AbortSignal) => config.handler!({ changes }, signal)
+      : async (changes: Change<T>[]) => ({
+          syncResults: map(changes, (c) => ({
+            status: "success" as const,
+            id: c.id,
+            type: c.type,
             serverSyncedAt: "",
-          });
+          })),
+          serverSyncedAt: "",
+        });
 
     this._syncQueue = new SyncQueue<T, C>({
       debounce: config.syncDebounce ?? 300,

@@ -61,7 +61,10 @@ describe("useCrud", () => {
     });
 
     it("does not trigger fetch when serverItems is provided", async () => {
-      const handler = vi.fn(async () => ({ items: [{ id: "3", name: "Fetched" }], serverSyncedAt: "" }));
+      const handler = vi.fn(async () => ({
+        items: [{ id: "3", name: "Fetched" }],
+        serverSyncedAt: "",
+      }));
       const serverConfig: Config<TestValue, TestContext> = {
         id: "test-crud-no-fetch",
         initialContext: {},
