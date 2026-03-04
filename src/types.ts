@@ -65,7 +65,7 @@ export type FetchState = "idle" | "fetching" | "error";
 // Unified handler type
 export type CrudHandler<T extends { id: string }, C> = (
   params: { query?: C; changes?: Change<T>[] },
-  signal: AbortSignal,
+  signal?: AbortSignal,
 ) => Promise<SyncResponse<T>>;
 
 // Config
