@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { createSyncServer, createCrudHandler } from "./server";
-import type { Result } from "../types";
+import { createSyncServer, createCrudHandler } from "../../runtime/server";
+import type { Result } from "../../types";
 
 interface TestItem {
   id: string;
@@ -34,7 +34,7 @@ const createRequest = <T, Q>(
 describe("createSyncServer", () => {
   describe("HTTP Method Validation", () => {
     it("rejects GET requests with 405", async () => {
-      const handler = createSyncServer<TestItem>(async () => ({}));
+      const handler = createSyncServer<TestItem>(async () => ({ serverSyncedAt: "test" }));
       const request = new Request("http://localhost/api/items", { method: "GET" });
 
       const response = await handler(request);
@@ -45,7 +45,7 @@ describe("createSyncServer", () => {
     });
 
     it("rejects PUT requests with 405", async () => {
-      const handler = createSyncServer<TestItem>(async () => ({}));
+      const handler = createSyncServer<TestItem>(async () => ({ serverSyncedAt: "test" }));
       const request = new Request("http://localhost/api/items", { method: "PUT" });
 
       const response = await handler(request);
@@ -54,7 +54,7 @@ describe("createSyncServer", () => {
     });
 
     it("rejects DELETE requests with 405", async () => {
-      const handler = createSyncServer<TestItem>(async () => ({}));
+      const handler = createSyncServer<TestItem>(async () => ({ serverSyncedAt: "test" }));
       const request = new Request("http://localhost/api/items", { method: "DELETE" });
 
       const response = await handler(request);
@@ -64,8 +64,8 @@ describe("createSyncServer", () => {
 
     it("accepts POST requests", async () => {
       const handler = createSyncServer<TestItem, TestQuery>(async (request) => {
-        if (request.query !== undefined) return { results: mockItems };
-        return {};
+        if (request.query !== undefined) return { items: mockItems, serverSyncedAt: "test" };
+        return { serverSyncedAt: "test" };
       });
       const request = createRequest<TestItem, TestQuery>({ query: { page: 1, limit: 10 } });
 
@@ -77,7 +77,7 @@ describe("createSyncServer", () => {
 
   describe("Request Body Parsing", () => {
     it("rejects invalid JSON with 400", async () => {
-      const handler = createSyncServer<TestItem>(async () => ({}));
+      const handler = createSyncServer<TestItem>(async () => ({ serverSyncedAt: "test" }));
       const request = new Request("http://localhost/api/items", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -92,7 +92,7 @@ describe("createSyncServer", () => {
     });
 
     it("rejects empty body with 400", async () => {
-      const handler = createSyncServer<TestItem>(async () => ({}));
+      const handler = createSyncServer<TestItem>(async () => ({ serverSyncedAt: "test" }));
       const request = createRequest<TestItem, unknown>({});
 
       const response = await handler(request);
@@ -103,7 +103,7 @@ describe("createSyncServer", () => {
     });
 
     it("rejects body without query or changes", async () => {
-      const handler = createSyncServer<TestItem>(async () => ({}));
+      const handler = createSyncServer<TestItem>(async () => ({ serverSyncedAt: "test" }));
       const request = new Request("http://localhost/api/items", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -121,8 +121,8 @@ describe("createSyncServer", () => {
   describe("Fetch Operations (Query)", () => {
     it("returns items when query is provided", async () => {
       const handler = createSyncServer<TestItem, TestQuery>(async (request) => {
-        if (request.query !== undefined) return { results: mockItems };
-        return {};
+        if (request.query !== undefined) return { items: mockItems, serverSyncedAt: "test" };
+        return { serverSyncedAt: "test" };
       });
       const request = createRequest<TestItem, TestQuery>({ query: { page: 1, limit: 10 } });
 
@@ -130,11 +130,11 @@ describe("createSyncServer", () => {
       const body = await response.json();
 
       expect(response.status).toBe(200);
-      expect(body.results).toEqual(mockItems);
+      expect(body.items).toEqual(mockItems);
     });
 
     it("passes query to handler", async () => {
-      const crudHandler = vi.fn().mockResolvedValue({ results: mockItems });
+      const crudHandler = vi.fn().mockResolvedValue({ items: mockItems, serverSyncedAt: "test" });
       const handler = createSyncServer<TestItem, TestQuery>(crudHandler);
       const query = { page: 2, limit: 5, search: "test" };
       const request = createRequest<TestItem, TestQuery>({ query });
@@ -147,8 +147,8 @@ describe("createSyncServer", () => {
     it("handles async handler", async () => {
       const handler = createSyncServer<TestItem, TestQuery>(async (request) => {
         await new Promise((r) => setTimeout(r, 10));
-        if (request.query !== undefined) return { results: mockItems };
-        return {};
+        if (request.query !== undefined) return { items: mockItems, serverSyncedAt: "test" };
+        return { serverSyncedAt: "test" };
       });
       const request = createRequest<TestItem, TestQuery>({ query: { page: 1, limit: 10 } });
 
@@ -156,7 +156,7 @@ describe("createSyncServer", () => {
       const body = await response.json();
 
       expect(response.status).toBe(200);
-      expect(body.results).toEqual(mockItems);
+      expect(body.items).toEqual(mockItems);
     });
 
     it("handles handler errors gracefully", async () => {
@@ -177,13 +177,13 @@ describe("createSyncServer", () => {
     it("processes create change successfully", async () => {
       const handler = createSyncServer<TestItem>(async (request) => {
         if (request.changes) {
-          const syncResults: Record<string, Result> = {};
+          const syncResults: Result[] = [];
           for (const change of request.changes) {
-            syncResults[change.id] = { status: "success" };
+            syncResults.push({ status: "success", id: change.data.id, type: change.type, serverSyncedAt: "test" });
           }
-          return { syncResults };
+          return { syncResults, serverSyncedAt: "test" };
         }
-        return {};
+        return { serverSyncedAt: "test" };
       });
       const request = createRequest<TestItem, unknown>({
         changes: [{ id: "temp-1", type: "create", data: { id: "temp-1", name: "New Item" } }],
@@ -193,19 +193,27 @@ describe("createSyncServer", () => {
       const body = await response.json();
 
       expect(response.status).toBe(200);
-      expect(body.syncResults).toEqual({ "temp-1": { status: "success" } });
+      expect(body.syncResults).toEqual([
+        { status: "success", id: "temp-1", type: "create", serverSyncedAt: "test" },
+      ]);
     });
 
     it("handles sync error", async () => {
       const handler = createSyncServer<TestItem>(async (request) => {
         if (request.changes) {
-          const syncResults: Record<string, Result> = {};
+          const syncResults: Result[] = [];
           for (const change of request.changes) {
-            syncResults[change.id] = { status: "error", error: "Duplicate entry" };
+            syncResults.push({
+              status: "error",
+              id: change.data.id,
+              type: change.type,
+              serverSyncedAt: "test",
+              error: "Duplicate entry",
+            });
           }
-          return { syncResults };
+          return { syncResults, serverSyncedAt: "test" };
         }
-        return {};
+        return { serverSyncedAt: "test" };
       });
       const request = createRequest<TestItem, unknown>({
         changes: [{ id: "temp-1", type: "create", data: { id: "temp-1", name: "New Item" } }],
@@ -215,8 +223,11 @@ describe("createSyncServer", () => {
       const body = await response.json();
 
       expect(response.status).toBe(200);
-      expect(body.syncResults["temp-1"]).toEqual({
+      expect(body.syncResults[0]).toEqual({
         status: "error",
+        id: "temp-1",
+        type: "create",
+        serverSyncedAt: "test",
         error: "Duplicate entry",
       });
     });
@@ -224,13 +235,13 @@ describe("createSyncServer", () => {
     it("processes multiple changes", async () => {
       const handler = createSyncServer<TestItem>(async (request) => {
         if (request.changes) {
-          const syncResults: Record<string, Result> = {};
+          const syncResults: Result[] = [];
           for (const change of request.changes) {
-            syncResults[change.id] = { status: "success" };
+            syncResults.push({ status: "success", id: change.data.id, type: change.type, serverSyncedAt: "test" });
           }
-          return { syncResults };
+          return { syncResults, serverSyncedAt: "test" };
         }
-        return {};
+        return { serverSyncedAt: "test" };
       });
       const request = createRequest<TestItem, unknown>({
         changes: [
@@ -243,22 +254,20 @@ describe("createSyncServer", () => {
       const response = await handler(request);
       const body = await response.json();
 
-      expect(Object.keys(body.syncResults)).toHaveLength(3);
-      expect(Object.values(body.syncResults).every((r: Result) => r.status === "success")).toBe(
-        true,
-      );
+      expect(body.syncResults).toHaveLength(3);
+      expect(body.syncResults.every((r: Result) => r.status === "success")).toBe(true);
     });
 
     it("handles mixed operation types", async () => {
       const handler = createSyncServer<TestItem>(async (request) => {
         if (request.changes) {
-          const syncResults: Record<string, Result> = {};
+          const syncResults: Result[] = [];
           for (const change of request.changes) {
-            syncResults[change.id] = { status: "success" };
+            syncResults.push({ status: "success", id: change.data.id, type: change.type, serverSyncedAt: "test" });
           }
-          return { syncResults };
+          return { syncResults, serverSyncedAt: "test" };
         }
-        return {};
+        return { serverSyncedAt: "test" };
       });
       const request = createRequest<TestItem, unknown>({
         changes: [
@@ -271,26 +280,30 @@ describe("createSyncServer", () => {
       const response = await handler(request);
       const body = await response.json();
 
-      expect(Object.keys(body.syncResults)).toHaveLength(3);
-      expect(Object.values(body.syncResults).every((r: Result) => r.status === "success")).toBe(
-        true,
-      );
+      expect(body.syncResults).toHaveLength(3);
+      expect(body.syncResults.every((r: Result) => r.status === "success")).toBe(true);
     });
 
     it("continues processing after individual failures", async () => {
       const handler = createSyncServer<TestItem>(async (request) => {
         if (request.changes) {
-          const syncResults: Record<string, Result> = {};
+          const syncResults: Result[] = [];
           for (const change of request.changes) {
             if (change.data.name === "fail") {
-              syncResults[change.id] = { status: "error", error: "Failed" };
+              syncResults.push({
+                status: "error",
+                id: change.data.id,
+                type: change.type,
+                serverSyncedAt: "test",
+                error: "Failed",
+              });
             } else {
-              syncResults[change.id] = { status: "success" };
+              syncResults.push({ status: "success", id: change.data.id, type: change.type, serverSyncedAt: "test" });
             }
           }
-          return { syncResults };
+          return { syncResults, serverSyncedAt: "test" };
         }
-        return {};
+        return { serverSyncedAt: "test" };
       });
       const request = createRequest<TestItem, unknown>({
         changes: [
@@ -303,25 +316,27 @@ describe("createSyncServer", () => {
       const response = await handler(request);
       const body = await response.json();
 
-      expect(body.syncResults["1"].status).toBe("success");
-      expect(body.syncResults["2"].status).toBe("error");
-      expect(body.syncResults["3"].status).toBe("success");
+      expect(body.syncResults[0].status).toBe("success");
+      expect(body.syncResults[1].status).toBe("error");
+      expect(body.syncResults[2].status).toBe("success");
     });
   });
 
   describe("Combined Query and Changes", () => {
     it("handles both query and changes in single request", async () => {
       const handler = createSyncServer<TestItem, TestQuery>(async (request) => {
-        const response: { results?: TestItem[]; syncResults?: Record<string, Result> } = {};
+        const response: { items?: TestItem[]; syncResults?: Result[]; serverSyncedAt: string } = {
+          serverSyncedAt: "test",
+        };
 
         if (request.query !== undefined) {
-          response.results = mockItems;
+          response.items = mockItems;
         }
 
         if (request.changes) {
-          const syncResults: Record<string, Result> = {};
+          const syncResults: Result[] = [];
           for (const change of request.changes) {
-            syncResults[change.id] = { status: "success" };
+            syncResults.push({ status: "success", id: change.data.id, type: change.type, serverSyncedAt: "test" });
           }
           response.syncResults = syncResults;
         }
@@ -337,34 +352,34 @@ describe("createSyncServer", () => {
       const body = await response.json();
 
       expect(response.status).toBe(200);
-      expect(body.results).toEqual(mockItems);
-      expect(body.syncResults["temp-1"].status).toBe("success");
+      expect(body.items).toEqual(mockItems);
+      expect(body.syncResults[0].status).toBe("success");
     });
 
-    it("returns only results when only query provided", async () => {
+    it("returns only items when only query provided", async () => {
       const handler = createSyncServer<TestItem, TestQuery>(async (request) => {
-        if (request.query !== undefined) return { results: mockItems };
-        return {};
+        if (request.query !== undefined) return { items: mockItems, serverSyncedAt: "test" };
+        return { serverSyncedAt: "test" };
       });
       const request = createRequest<TestItem, TestQuery>({ query: { page: 1, limit: 10 } });
 
       const response = await handler(request);
       const body = await response.json();
 
-      expect(body.results).toBeDefined();
+      expect(body.items).toBeDefined();
       expect(body.syncResults).toBeUndefined();
     });
 
     it("returns only syncResults when only changes provided", async () => {
       const handler = createSyncServer<TestItem>(async (request) => {
         if (request.changes) {
-          const syncResults: Record<string, Result> = {};
+          const syncResults: Result[] = [];
           for (const change of request.changes) {
-            syncResults[change.id] = { status: "success" };
+            syncResults.push({ status: "success", id: change.data.id, type: change.type, serverSyncedAt: "test" });
           }
-          return { syncResults };
+          return { syncResults, serverSyncedAt: "test" };
         }
-        return {};
+        return { serverSyncedAt: "test" };
       });
       const request = createRequest<TestItem, unknown>({
         changes: [{ id: "1", type: "create", data: { id: "1", name: "New" } }],
@@ -373,7 +388,7 @@ describe("createSyncServer", () => {
       const response = await handler(request);
       const body = await response.json();
 
-      expect(body.results).toBeUndefined();
+      expect(body.items).toBeUndefined();
       expect(body.syncResults).toBeDefined();
     });
   });
@@ -412,7 +427,7 @@ describe("createSyncServer", () => {
     it("handles async handler rejection", async () => {
       const handler = createSyncServer<TestItem>(async () => {
         await Promise.reject(new Error("Async error"));
-        return {};
+        return { serverSyncedAt: "test" };
       });
       const request = createRequest<TestItem, unknown>({
         changes: [{ id: "1", type: "create", data: { id: "1", name: "New" } }],
@@ -429,8 +444,8 @@ describe("createSyncServer", () => {
   describe("Response Headers", () => {
     it("returns JSON content type", async () => {
       const handler = createSyncServer<TestItem, TestQuery>(async (request) => {
-        if (request.query !== undefined) return { results: mockItems };
-        return {};
+        if (request.query !== undefined) return { items: mockItems, serverSyncedAt: "test" };
+        return { serverSyncedAt: "test" };
       });
       const request = createRequest<TestItem, TestQuery>({ query: { page: 1, limit: 10 } });
 
@@ -440,7 +455,7 @@ describe("createSyncServer", () => {
     });
 
     it("returns JSON content type on errors", async () => {
-      const handler = createSyncServer<TestItem>(async () => ({}));
+      const handler = createSyncServer<TestItem>(async () => ({ serverSyncedAt: "test" }));
       const request = new Request("http://localhost/api/items", { method: "GET" });
 
       const response = await handler(request);
@@ -452,8 +467,8 @@ describe("createSyncServer", () => {
   describe("Edge Cases", () => {
     it("handles empty changes array", async () => {
       const handler = createSyncServer<TestItem>(async (request) => {
-        if (request.changes) return { syncResults: {} };
-        return {};
+        if (request.changes) return { syncResults: [], serverSyncedAt: "test" };
+        return { serverSyncedAt: "test" };
       });
       const request = createRequest<TestItem, unknown>({ changes: [] });
 
@@ -461,14 +476,14 @@ describe("createSyncServer", () => {
       const body = await response.json();
 
       expect(response.status).toBe(200);
-      expect(body.syncResults).toEqual({});
+      expect(body.syncResults).toEqual([]);
     });
 
     it("handles null query value", async () => {
       const handler = createSyncServer<TestItem, TestQuery>(async (request) => {
         // null query is passed through (null !== undefined)
-        if (request.query !== undefined) return { results: mockItems };
-        return {};
+        if (request.query !== undefined) return { items: mockItems, serverSyncedAt: "test" };
+        return { serverSyncedAt: "test" };
       });
       const request = new Request("http://localhost/api/items", {
         method: "POST",
@@ -481,19 +496,19 @@ describe("createSyncServer", () => {
 
       // null !== undefined, so query is passed to handler
       expect(response.status).toBe(200);
-      expect(body.results).toEqual(mockItems);
+      expect(body.items).toEqual(mockItems);
     });
 
     it("handles large batch of changes", async () => {
       const handler = createSyncServer<TestItem>(async (request) => {
         if (request.changes) {
-          const syncResults: Record<string, Result> = {};
+          const syncResults: Result[] = [];
           for (const change of request.changes) {
-            syncResults[change.id] = { status: "success" };
+            syncResults.push({ status: "success", id: change.data.id, type: change.type, serverSyncedAt: "test" });
           }
-          return { syncResults };
+          return { syncResults, serverSyncedAt: "test" };
         }
-        return {};
+        return { serverSyncedAt: "test" };
       });
 
       const changes = Array.from({ length: 100 }, (_, i) => ({
@@ -507,10 +522,8 @@ describe("createSyncServer", () => {
       const response = await handler(request);
       const body = await response.json();
 
-      expect(Object.keys(body.syncResults)).toHaveLength(100);
-      expect(Object.values(body.syncResults).every((r: Result) => r.status === "success")).toBe(
-        true,
-      );
+      expect(body.syncResults).toHaveLength(100);
+      expect(body.syncResults.every((r: Result) => r.status === "success")).toBe(true);
     });
   });
 });
@@ -553,10 +566,10 @@ describe("createCrudHandler", () => {
     const handler = createHandler();
     const result = await handler({ query: { page: 1, limit: 10 } });
 
-    expect(result.results).toHaveLength(2);
-    expect(result.results![0].name).toBe("Item 1");
-    expect(result.serverTimeStamp).toBeDefined();
-    expect(typeof result.serverTimeStamp).toBe("string");
+    expect(result.items).toHaveLength(2);
+    expect(result.items![0].name).toBe("Item 1");
+    expect(result.serverSyncedAt).toBeDefined();
+    expect(typeof result.serverSyncedAt).toBe("string");
   });
 
   it("handles create changes", async () => {
@@ -565,7 +578,12 @@ describe("createCrudHandler", () => {
       changes: [{ id: "3", type: "create", data: { id: "3", name: "Item 3" } }],
     });
 
-    expect(result.syncResults!["3"]).toEqual({ status: "success" });
+    expect(result.syncResults![0]).toEqual({
+      status: "success",
+      id: "3",
+      type: "create",
+      serverSyncedAt: expect.any(String),
+    });
     expect(db.has("3")).toBe(true);
   });
 
@@ -575,7 +593,12 @@ describe("createCrudHandler", () => {
       changes: [{ id: "1", type: "update", data: { id: "1", name: "Updated" } }],
     });
 
-    expect(result.syncResults!["1"]).toEqual({ status: "success" });
+    expect(result.syncResults![0]).toEqual({
+      status: "success",
+      id: "1",
+      type: "update",
+      serverSyncedAt: expect.any(String),
+    });
     expect(db.get("1")!.name).toBe("Updated");
   });
 
@@ -585,7 +608,12 @@ describe("createCrudHandler", () => {
       changes: [{ id: "1", type: "delete", data: { id: "1", name: "Item 1" } }],
     });
 
-    expect(result.syncResults!["1"]).toEqual({ status: "success" });
+    expect(result.syncResults![0]).toEqual({
+      status: "success",
+      id: "1",
+      type: "delete",
+      serverSyncedAt: expect.any(String),
+    });
     expect(db.has("1")).toBe(false);
   });
 
@@ -595,7 +623,13 @@ describe("createCrudHandler", () => {
       changes: [{ id: "999", type: "update", data: { id: "999", name: "Nope" } }],
     });
 
-    expect(result.syncResults!["999"]).toEqual({ status: "error", error: "Not found" });
+    expect(result.syncResults![0]).toEqual({
+      status: "error",
+      id: "999",
+      type: "update",
+      serverSyncedAt: expect.any(String),
+      error: "Not found",
+    });
   });
 
   it("handles mixed query and changes", async () => {
@@ -605,8 +639,13 @@ describe("createCrudHandler", () => {
       changes: [{ id: "3", type: "create", data: { id: "3", name: "Item 3" } }],
     });
 
-    expect(result.results).toHaveLength(3); // changes processed first, then fetch
-    expect(result.syncResults!["3"]).toEqual({ status: "success" });
+    expect(result.items).toHaveLength(3); // changes processed first, then fetch
+    expect(result.syncResults![0]).toEqual({
+      status: "success",
+      id: "3",
+      type: "create",
+      serverSyncedAt: expect.any(String),
+    });
   });
 
   it("handles multiple changes in batch", async () => {
@@ -619,10 +658,25 @@ describe("createCrudHandler", () => {
       ],
     });
 
-    expect(Object.keys(result.syncResults!)).toHaveLength(3);
-    expect(result.syncResults!["3"]).toEqual({ status: "success" });
-    expect(result.syncResults!["1"]).toEqual({ status: "success" });
-    expect(result.syncResults!["2"]).toEqual({ status: "success" });
+    expect(result.syncResults!).toHaveLength(3);
+    expect(result.syncResults![0]).toEqual({
+      status: "success",
+      id: "3",
+      type: "create",
+      serverSyncedAt: expect.any(String),
+    });
+    expect(result.syncResults![1]).toEqual({
+      status: "success",
+      id: "1",
+      type: "update",
+      serverSyncedAt: expect.any(String),
+    });
+    expect(result.syncResults![2]).toEqual({
+      status: "success",
+      id: "2",
+      type: "delete",
+      serverSyncedAt: expect.any(String),
+    });
     expect(db.size).toBe(2); // 2 original - 1 deleted + 1 created
   });
 
@@ -635,7 +689,12 @@ describe("createCrudHandler", () => {
       changes: [{ id: "3", type: "create", data: { id: "3", name: "Item 3" } }],
     });
 
-    expect(result.syncResults!["3"]).toEqual({ status: "success" });
+    expect(result.syncResults![0]).toEqual({
+      status: "success",
+      id: "3",
+      type: "create",
+      serverSyncedAt: expect.any(String),
+    });
     expect(db.has("3")).toBe(false); // not actually created since no create handler
   });
 
@@ -656,8 +715,13 @@ describe("createCrudHandler", () => {
       changes: [{ id: "3", type: "create", data: { id: "3", name: "Async Item" } }],
     });
 
-    expect(result.results).toHaveLength(3); // changes processed first, then fetch
-    expect(result.syncResults!["3"]).toEqual({ status: "success" });
+    expect(result.items).toHaveLength(3); // changes processed first, then fetch
+    expect(result.syncResults![0]).toEqual({
+      status: "success",
+      id: "3",
+      type: "create",
+      serverSyncedAt: expect.any(String),
+    });
     expect(db.get("3")!.name).toBe("Async Item");
   });
 
@@ -669,7 +733,7 @@ describe("createCrudHandler", () => {
     const body = await response.json();
 
     expect(response.status).toBe(200);
-    expect(body.results).toHaveLength(2);
+    expect(body.items).toHaveLength(2);
   });
 
   describe("serverState", () => {
@@ -683,7 +747,7 @@ describe("createCrudHandler", () => {
 
       const result = await handler({ query: { page: 1, limit: 1 } });
 
-      expect(result.results).toHaveLength(1);
+      expect(result.items).toHaveLength(1);
       expect(result.serverState).toEqual({ total: 2, hasMore: true });
     });
 
@@ -691,7 +755,7 @@ describe("createCrudHandler", () => {
       const handler = createHandler();
       const result = await handler({ query: { page: 1, limit: 10 } });
 
-      expect(result.results).toHaveLength(2);
+      expect(result.items).toHaveLength(2);
       expect(result.serverState).toBeUndefined();
     });
 
@@ -705,7 +769,7 @@ describe("createCrudHandler", () => {
 
       const result = await handler({ query: { page: 1, limit: 10 } });
 
-      expect(result.results).toHaveLength(2);
+      expect(result.items).toHaveLength(2);
       expect(result.serverState).toBeUndefined();
     });
 
@@ -720,38 +784,38 @@ describe("createCrudHandler", () => {
       const response = await handler(request);
       const body = await response.json();
 
-      expect(body.results).toHaveLength(2);
+      expect(body.items).toHaveLength(2);
       expect(body.serverState).toEqual({ total: 2 });
     });
   });
 
-  describe("serverTimeStamp", () => {
-    it("always includes serverTimeStamp in response", async () => {
+  describe("serverSyncedAt", () => {
+    it("always includes serverSyncedAt in response", async () => {
       const handler = createHandler();
       const result = await handler({ query: { page: 1, limit: 10 } });
 
-      expect(result.serverTimeStamp).toBeDefined();
-      expect(typeof result.serverTimeStamp).toBe("string");
-      expect(result.serverTimeStamp!.length).toBeGreaterThan(0);
+      expect(result.serverSyncedAt).toBeDefined();
+      expect(typeof result.serverSyncedAt).toBe("string");
+      expect(result.serverSyncedAt.length).toBeGreaterThan(0);
     });
 
-    it("includes serverTimeStamp even for changes-only requests", async () => {
+    it("includes serverSyncedAt even for changes-only requests", async () => {
       const handler = createHandler();
       const result = await handler({
         changes: [{ id: "3", type: "create", data: { id: "3", name: "Item 3" } }],
       });
 
-      expect(result.serverTimeStamp).toBeDefined();
+      expect(result.serverSyncedAt).toBeDefined();
     });
 
-    it("generates same serverTimeStamp for all records in a batch", async () => {
+    it("generates same serverSyncedAt for all records in a batch", async () => {
       const timestamps: string[] = [];
       const handler = createCrudHandler<TestItem, TestQuery>({
         create: (record) => {
-          timestamps.push(record.serverTimeStamp);
+          timestamps.push(record.serverSyncedAt);
         },
         update: (record) => {
-          timestamps.push(record.serverTimeStamp);
+          timestamps.push(record.serverSyncedAt);
         },
       });
 
@@ -783,7 +847,7 @@ describe("createCrudHandler", () => {
       expect(capturedRecord).toEqual({
         id: "5",
         data: { id: "5", name: "Test" },
-        serverTimeStamp: expect.any(String),
+        serverSyncedAt: expect.any(String),
         deleted: false,
       });
     });
@@ -803,20 +867,20 @@ describe("createCrudHandler", () => {
       expect(capturedRecord).toEqual({
         id: "1",
         data: { id: "1", name: "Item 1" },
-        serverTimeStamp: expect.any(String),
+        serverSyncedAt: expect.any(String),
         deleted: true,
       });
     });
 
-    it("passes serverTimeStamp through createSyncServer to HTTP response", async () => {
+    it("passes serverSyncedAt through createSyncServer to HTTP response", async () => {
       const handler = createSyncServer<TestItem, TestQuery>(createHandler());
       const request = createRequest<TestItem, TestQuery>({ query: { page: 1, limit: 10 } });
 
       const response = await handler(request);
       const body = await response.json();
 
-      expect(body.serverTimeStamp).toBeDefined();
-      expect(typeof body.serverTimeStamp).toBe("string");
+      expect(body.serverSyncedAt).toBeDefined();
+      expect(typeof body.serverSyncedAt).toBe("string");
     });
   });
 });

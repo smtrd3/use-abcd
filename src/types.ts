@@ -5,8 +5,18 @@ export type PlainObject = {
 };
 
 export type Result = {
+  id: string;
+  type: ChangeType;
   status: "success" | "error";
+  serverSyncedAt: string;
   error?: string;
+};
+
+// Shared response type for sync operations
+export type SyncResponse<T> = {
+  items?: T[];
+  syncResults?: Result[];
+  serverSyncedAt: string;
 };
 
 export type Fn<A, R = void> = (arg: A) => R;
@@ -56,7 +66,7 @@ export type FetchState = "idle" | "fetching" | "error";
 export type CrudHandler<T extends { id: string }, C> = (
   params: { query?: C; changes?: Change<T>[] },
   signal: AbortSignal,
-) => Promise<{ results?: T[]; syncResults?: Record<string, Result>; serverTimeStamp?: string }>;
+) => Promise<SyncResponse<T>>;
 
 // Config
 export type Config<T extends { id: string }, C> = {

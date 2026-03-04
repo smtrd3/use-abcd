@@ -1,5 +1,5 @@
 import { ulid } from "ulid";
-import { fromPairs, isArray, map } from "lodash-es";
+import { isArray, map } from "lodash-es";
 import type { Change, Result } from "../types";
 import type { SyncRequestBody, SyncResponseBody, ServerRecord } from "./types";
 
@@ -24,20 +24,18 @@ export function createCrudHandler<T extends { id: string }, Q = unknown, S = unk
   config: SyncServerConfig<T, Q, S>,
 ): CrudHandler<T, Q> {
   return async (request) => {
-    const response: SyncResponseBody<T> = {};
-    const serverTimeStamp = ulid();
-
-    response.serverTimeStamp = serverTimeStamp;
+    const serverSyncedAt = ulid();
+    const response: SyncResponseBody<T> = { serverSyncedAt };
 
     // Process all changes in parallel
     if (request.changes) {
-      const entries = await Promise.all(
-        map(request.changes, async (change): Promise<[string, Result]> => {
+      response.syncResults = await Promise.all(
+        map(request.changes, async (change): Promise<Result> => {
           try {
             const record: ServerRecord<T> = {
               id: change.data.id,
               data: change.data,
-              serverTimeStamp,
+              serverSyncedAt,
               deleted: change.type === "delete",
             };
 
@@ -48,28 +46,26 @@ export function createCrudHandler<T extends { id: string }, Q = unknown, S = unk
             } else if (change.type === "delete" && config.remove) {
               await config.remove(record);
             }
-            return [change.id, { status: "success" }];
+            return { status: "success", id: change.data.id, type: change.type, serverSyncedAt };
           } catch (error) {
-            return [
-              change.id,
-              {
-                status: "error",
-                error: error instanceof Error ? error.message : "Unknown error",
-              },
-            ];
+            return {
+              status: "error",
+              id: change.data.id,
+              type: change.type,
+              serverSyncedAt,
+              error: error instanceof Error ? error.message : "Unknown error",
+            };
           }
         }),
       );
-
-      response.syncResults = fromPairs(entries);
     }
 
     if (request.query !== undefined && config.fetch) {
       const result = await config.fetch({ scope: request.scope, query: request.query });
       if (isArray(result)) {
-        response.results = result;
+        response.items = result;
       } else {
-        response.results = result.items;
+        response.items = result.items;
         response.serverState = result.serverState;
       }
     }

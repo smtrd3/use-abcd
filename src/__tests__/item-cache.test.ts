@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { Collection } from "./collection";
-import type { Config } from "./types";
+import { Collection } from "../collection";
+import type { Config } from "../types";
 
 interface TestItem {
   id: string;
@@ -20,10 +20,11 @@ describe("Item Cache with WeakMap", () => {
       id: "test-item-cache",
       initialContext: {},
       handler: async () => ({
-        results: [
+        items: [
           { id: "1", name: "Item 1", value: 100 },
           { id: "2", name: "Item 2", value: 200 },
         ],
+        serverSyncedAt: "",
       }),
     };
   });
@@ -131,10 +132,11 @@ describe("Item Cache with WeakMap", () => {
         handler: async () => {
           fetchCount++;
           return {
-            results: [
+            items: [
               { id: "1", name: "Item 1", value: fetchCount === 1 ? 100 : 150 },
               { id: "2", name: "Item 2", value: 200 },
             ],
+            serverSyncedAt: "",
           };
         },
       };
@@ -352,13 +354,14 @@ describe("Item Cache with WeakMap", () => {
         handler: async (params) => {
           const context = params.query;
           if (context?.filter === "high") {
-            return { results: [{ id: "2", name: "Item 2", value: 200 }] };
+            return { items: [{ id: "2", name: "Item 2", value: 200 }], serverSyncedAt: "" };
           }
           return {
-            results: [
+            items: [
               { id: "1", name: "Item 1", value: 100 },
               { id: "2", name: "Item 2", value: 200 },
             ],
+            serverSyncedAt: "",
           };
         },
       };

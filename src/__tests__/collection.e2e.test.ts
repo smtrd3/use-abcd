@@ -2,11 +2,11 @@ import { describe, it, expect, vi, beforeAll, afterAll, beforeEach, afterEach } 
 import { setupServer } from "msw/node";
 import { http, HttpResponse, delay } from "msw";
 import { ulid } from "ulid";
-import { Collection } from "./collection";
-import { createSyncServer, createCrudHandler } from "./runtime/server";
-import { createSyncClient } from "./runtime";
-import type { Config } from "./types";
-import type { SyncRequestBody } from "./runtime";
+import { Collection } from "../collection";
+import { createSyncServer, createCrudHandler } from "../runtime/server";
+import { createSyncClient } from "../runtime";
+import type { Config } from "../types";
+import type { SyncRequestBody } from "../runtime";
 
 // ============================================================================
 // Test Types
@@ -403,11 +403,14 @@ describe("Collection E2E with MSW and createSyncServer", () => {
         http.post("/api/users", async ({ request }) => {
           const body = (await request.json()) as SyncRequestBody<User, UserQuery>;
           if (body.changes) {
-            const syncResults: Record<string, { status: string; error: string }> = {};
-            for (const c of body.changes) {
-              syncResults[c.id] = { status: "error", error: "Server error" };
-            }
-            return HttpResponse.json({ syncResults });
+            const syncResults = body.changes.map((c) => ({
+              status: "error" as const,
+              id: c.id,
+              type: c.type,
+              serverSyncedAt: "",
+              error: "Server error",
+            }));
+            return HttpResponse.json({ syncResults, serverSyncedAt: "" });
           }
           // For fetch requests, delegate to the real handler
           const syncServer = createSyncServerInstance();
@@ -455,18 +458,23 @@ describe("Collection E2E with MSW and createSyncServer", () => {
           if (body.changes) {
             attemptCount++;
             if (attemptCount < 3) {
-              const syncResults: Record<string, { status: string; error: string }> = {};
-              for (const c of body.changes) {
-                syncResults[c.id] = { status: "error", error: "Temporary error" };
-              }
-              return HttpResponse.json({ syncResults });
+              const syncResults = body.changes.map((c) => ({
+                status: "error" as const,
+                id: c.id,
+                type: c.type,
+                serverSyncedAt: "",
+                error: "Temporary error",
+              }));
+              return HttpResponse.json({ syncResults, serverSyncedAt: "" });
             }
             // Third attempt succeeds
-            const syncResults: Record<string, { status: string }> = {};
-            for (const c of body.changes) {
-              syncResults[c.id] = { status: "success" };
-            }
-            return HttpResponse.json({ syncResults });
+            const syncResults = body.changes.map((c) => ({
+              status: "success" as const,
+              id: c.id,
+              type: c.type,
+              serverSyncedAt: "",
+            }));
+            return HttpResponse.json({ syncResults, serverSyncedAt: "" });
           }
           // For fetch requests
           const syncServer = createSyncServerInstance();
@@ -774,11 +782,11 @@ describe("Collection E2E with MSW and createSyncServer", () => {
 
   describe("serverItems", () => {
     it("uses serverItems as initial data without fetching", async () => {
-      const handler = vi.fn(createSyncServerInstance());
+      const handler = vi.fn(async () => ({ items: [] as User[], serverSyncedAt: "" }));
       const config: Config<User, UserQuery> = {
         id: `server-items-${Date.now()}`,
         initialContext: { page: 1, limit: 10 },
-        handler: handler as Config<User, UserQuery>["handler"],
+        handler,
         serverItems: [
           { id: "s1", name: "Server User 1", email: "s1@example.com", role: "user" },
           { id: "s2", name: "Server User 2", email: "s2@example.com", role: "admin" },

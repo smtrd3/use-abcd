@@ -1,5 +1,5 @@
 import { create, type Draft } from "mutative";
-import { fromPairs, map, set } from "lodash-es";
+import { map, set } from "lodash-es";
 import { SyncQueue } from "./sync-queue";
 import { FetchHandler } from "./fetch-handler";
 import { Item } from "./item";
@@ -12,7 +12,6 @@ import type {
   SyncQueueState,
   FetchState,
   Change,
-  Result,
 } from "./types";
 
 export type CollectionState<T, C> = {
@@ -98,21 +97,22 @@ export class Collection<T extends { id: string }, C> {
     // Derive fetch/sync from unified handler
     const fetchFn = config.handler
       ? (ctx: C, signal: AbortSignal) =>
-          config.handler!({ query: ctx }, signal).then((r) => r.results ?? [])
+          config.handler!({ query: ctx }, signal).then((r) => r.items ?? [])
       : async () => [] as T[];
-
-    const defaultSyncResult = (changes: Change<T>[]) =>
-      fromPairs(map(changes, (c) => [c.id, { status: "success" as const }])) as Record<
-        string,
-        Result
-      >;
 
     const syncFn = config.handler
       ? (changes: Change<T>[], _ctx: C, signal: AbortSignal) =>
-          config.handler!({ changes }, signal).then(
-            (r) => r.syncResults ?? defaultSyncResult(changes),
-          )
-      : async (changes: Change<T>[]) => defaultSyncResult(changes);
+          config.handler!({ changes }, signal)
+      : async (changes: Change<T>[]) =>
+          ({
+            syncResults: map(changes, (c) => ({
+              status: "success" as const,
+              id: c.id,
+              type: c.type,
+              serverSyncedAt: "",
+            })),
+            serverSyncedAt: "",
+          });
 
     this._syncQueue = new SyncQueue<T, C>({
       debounce: config.syncDebounce ?? 300,

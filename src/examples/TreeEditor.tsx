@@ -52,9 +52,9 @@ let nodeCounter = 0;
 const TreeConfig: TreeConfig<FileData, FileContext> = {
   id: TREE_ID,
   initialContext: {},
+  serverItems: initialTreeData,
   rootId: "root",
   getNodeId: () => `node-${++nodeCounter}`,
-  handler: async () => ({ results: initialTreeData }),
 };
 
 // Recursive tree node component

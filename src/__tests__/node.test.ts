@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { Collection } from "./collection";
-import type { TreeNode } from "./node";
-import type { Config } from "./types";
+import { Collection } from "../collection";
+import type { TreeNode } from "../node";
+import type { Config } from "../types";
 
 interface TestValue {
   name: string;
@@ -19,7 +19,7 @@ describe("Node", () => {
       id: "test-node",
       initialContext: {},
       rootId: "root",
-      handler: async () => ({ results: [] }),
+      handler: async () => ({ items: [], serverSyncedAt: "" }),
     };
   });
 
@@ -1120,13 +1120,15 @@ describe("Node", () => {
           if (params.changes) {
             // Delay sync to keep items in pending state
             await new Promise((resolve) => setTimeout(resolve, 500));
-            const syncResults: Record<string, { status: "success" }> = {};
-            for (const c of params.changes) {
-              syncResults[c.id] = { status: "success" };
-            }
-            return { syncResults };
+            const syncResults = params.changes.map((c) => ({
+              status: "success" as const,
+              id: c.id,
+              type: c.type,
+              serverSyncedAt: "",
+            }));
+            return { syncResults, serverSyncedAt: "" };
           }
-          return { results: [] };
+          return { items: [], serverSyncedAt: "" };
         },
       };
 

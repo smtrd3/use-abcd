@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
-import { useCrudTree, type TreeConfig } from "./useCrudTree";
-import { Collection } from "./collection";
+import { useCrudTree, type TreeConfig } from "../useCrudTree";
+import { Collection } from "../collection";
 
 interface TestValue {
   name: string;
@@ -19,7 +19,7 @@ describe("useCrudTree", () => {
       id: "test-crud-tree",
       initialContext: {},
       rootId: "root",
-      handler: async () => ({ results: [] }),
+      handler: async () => ({ items: [], serverSyncedAt: "" }),
     };
   });
 

@@ -3,8 +3,8 @@ import { renderHook, act } from "@testing-library/react";
 import React from "react";
 import { renderToString } from "react-dom/server";
 import { hydrateRoot } from "react-dom/client";
-import { useCrud, type Config } from "./useCrud";
-import { Collection, buildServerSnapshot } from "./collection";
+import { useCrud, type Config } from "../useCrud";
+import { Collection, buildServerSnapshot } from "../collection";
 
 interface TestValue {
   id: string;
@@ -22,7 +22,7 @@ describe("useCrud", () => {
     config = {
       id: "test-crud",
       initialContext: {},
-      handler: async () => ({ results: [] }),
+      handler: async () => ({ items: [], serverSyncedAt: "" }),
     };
   });
 
@@ -32,7 +32,7 @@ describe("useCrud", () => {
 
   describe("serverItems", () => {
     it("uses serverItems as initial data without fetching", async () => {
-      const handler = vi.fn(async () => ({ results: [] }));
+      const handler = vi.fn(async () => ({ items: [], serverSyncedAt: "" }));
       const serverConfig: Config<TestValue, TestContext> = {
         id: "test-crud-server-items",
         initialContext: {},
@@ -61,7 +61,7 @@ describe("useCrud", () => {
     });
 
     it("does not trigger fetch when serverItems is provided", async () => {
-      const handler = vi.fn(async () => ({ results: [{ id: "3", name: "Fetched" }] }));
+      const handler = vi.fn(async () => ({ items: [{ id: "3", name: "Fetched" }], serverSyncedAt: "" }));
       const serverConfig: Config<TestValue, TestContext> = {
         id: "test-crud-no-fetch",
         initialContext: {},
@@ -122,7 +122,7 @@ describe("useCrud", () => {
       const ssrConfig: Config<TestValue, TestContext> = {
         id: "test-crud-ssr-match",
         initialContext: { filter: "active" },
-        handler: async () => ({ results: [] }),
+        handler: async () => ({ items: [], serverSyncedAt: "" }),
         serverItems: [
           { id: "1", name: "Item 1" },
           { id: "2", name: "Item 2" },
@@ -156,7 +156,7 @@ describe("useCrud", () => {
       const ssrConfig: Config<TestValue, TestContext> = {
         id: "test-crud-ssr-hydration",
         initialContext: {},
-        handler: async () => ({ results: [] }),
+        handler: async () => ({ items: [], serverSyncedAt: "" }),
         serverItems: [
           { id: "1", name: "Alice" },
           { id: "2", name: "Bob" },

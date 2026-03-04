@@ -1,17 +1,14 @@
 import { create, type Draft } from "mutative";
 import { size, isEmpty, get, take } from "lodash-es";
-import type { Change, SyncQueueState, Result } from "./types";
+import type { Change, SyncQueueState, SyncResponse } from "./types";
 
 export type SyncQueueConfig<T, C = unknown> = {
   debounce: number;
   maxRetries: number;
   batchSize?: number;
   getContext?: () => C;
-  onSync: (
-    changes: Change<T>[],
-    context: C,
-    signal: AbortSignal,
-  ) => Promise<Record<string, Result>>;
+  onSync: (changes: Change<T>[], context: C, signal: AbortSignal) => Promise<SyncResponse<T>>;
+  onServerItems?: (items: T[]) => void;
 };
 
 /**
@@ -35,7 +32,7 @@ const coalesce = <T>(existing: Change<T> | undefined, next: Change<T>): Change<T
   return next;
 };
 
-export class SyncQueue<T, C = unknown> {
+export class SyncQueue<T extends { id: string }, C = unknown> {
   private _config: SyncQueueConfig<T, C>;
   private _state: SyncQueueState<T>;
   private _subscribers = new Set<() => void>();
@@ -179,8 +176,8 @@ export class SyncQueue<T, C = unknown> {
     this._abortController = new AbortController();
 
     try {
-      const results = await this._config.onSync(changes, context, this._abortController.signal);
-      this._processResults(results);
+      const response = await this._config.onSync(changes, context, this._abortController.signal);
+      this._processResponse(response);
     } catch (error) {
       this._handleError(error);
     }
@@ -190,12 +187,13 @@ export class SyncQueue<T, C = unknown> {
     if (size(this._state.queue) > 0 && !this._state.isPaused) this._scheduleFlush();
   }
 
-  private _processResults(resultMap: Record<string, Result>): void {
+  private _processResponse(response: SyncResponse<T>): void {
     const inFlight = this._state.inFlight;
+    const resultMap = new Map((response.syncResults ?? []).map((r) => [r.id, r] as const));
 
     this._updateState((draft) => {
       for (const [id, op] of inFlight) {
-        const result = resultMap[id];
+        const result = resultMap.get(id);
 
         if (result?.status === "success") {
           draft.errors.delete(id);
@@ -214,6 +212,17 @@ export class SyncQueue<T, C = unknown> {
       draft.inFlight = new Map();
       draft.isSyncing = false;
     });
+
+    // Notify about extra server items (not in the change list)
+    if (this._config.onServerItems && size(response.items) > 0) {
+      const changeIds = new Set((response.syncResults ?? []).map((r) => r.id));
+      const extraItems = (response.items ?? []).filter(
+        (item: unknown) => !changeIds.has((item as T).id),
+      );
+      if (size(extraItems) > 0) {
+        this._config.onServerItems(extraItems);
+      }
+    }
   }
 
   private _handleError(error: unknown): void {

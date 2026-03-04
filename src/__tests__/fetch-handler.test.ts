@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach, beforeAll, afterAll } from "vitest";
 import { http, HttpResponse, delay } from "msw";
 import { setupServer } from "msw/node";
-import { FetchHandler, type FetchHandlerConfig } from "./fetch-handler";
+import { FetchHandler, type FetchHandlerConfig } from "../fetch-handler";
 
 interface TestItem {
   id: string;
