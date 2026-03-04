@@ -1,10 +1,10 @@
 import "./index.css";
 import { useCallback } from "react";
-import { Products } from "./examples/Products";
-import { PaginatedUsers } from "./examples/PaginatedUsers";
-import { OptimisticComments } from "./examples/OptimisticComments";
-import { TreeEditor } from "./examples/TreeEditor";
-import { Benchmark } from "./examples/Benchmark";
+import { Products } from "./Products";
+import { PaginatedUsers } from "./PaginatedUsers";
+import { OptimisticComments } from "./OptimisticComments";
+import { TreeEditor } from "./TreeEditor";
+import { Benchmark } from "./Benchmark";
 import { Switch, Route, Link } from "wouter";
 
 function App() {

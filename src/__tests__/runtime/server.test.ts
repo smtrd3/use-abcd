@@ -680,24 +680,6 @@ describe("createCrudHandler", () => {
     expect(db.size).toBe(2); // 2 original - 1 deleted + 1 created
   });
 
-  it("succeeds for unhandled change types when handler not configured", async () => {
-    const handler = createCrudHandler<TestItem, TestQuery>({
-      fetch: () => [...db.values()],
-    });
-
-    const result = await handler({
-      changes: [{ id: "3", type: "create", data: { id: "3", name: "Item 3" } }],
-    });
-
-    expect(result.syncResults![0]).toEqual({
-      status: "success",
-      id: "3",
-      type: "create",
-      serverSyncedAt: expect.any(String),
-    });
-    expect(db.has("3")).toBe(false); // not actually created since no create handler
-  });
-
   it("works with async handlers", async () => {
     const handler = createCrudHandler<TestItem, TestQuery>({
       fetch: async ({ query }) => {
@@ -708,6 +690,8 @@ describe("createCrudHandler", () => {
         await new Promise((r) => setTimeout(r, 10));
         db.set(record.data.id, record.data);
       },
+      update: async () => {},
+      remove: async () => {},
     });
 
     const result = await handler({
@@ -743,6 +727,9 @@ describe("createCrudHandler", () => {
           const items = [...db.values()].slice(0, query.limit);
           return { items, serverState: { total: db.size, hasMore: db.size > query.limit } };
         },
+        create: () => {},
+        update: () => {},
+        remove: () => {},
       });
 
       const result = await handler({ query: { page: 1, limit: 1 } });
@@ -765,6 +752,9 @@ describe("createCrudHandler", () => {
           const items = [...db.values()].slice(0, query.limit);
           return { items };
         },
+        create: () => {},
+        update: () => {},
+        remove: () => {},
       });
 
       const result = await handler({ query: { page: 1, limit: 10 } });
@@ -777,6 +767,9 @@ describe("createCrudHandler", () => {
       const handler = createSyncServer<TestItem, TestQuery>(
         createCrudHandler<TestItem, TestQuery, { total: number }>({
           fetch: () => ({ items: [...db.values()], serverState: { total: db.size } }),
+          create: () => {},
+          update: () => {},
+          remove: () => {},
         }),
       );
       const request = createRequest<TestItem, TestQuery>({ query: { page: 1, limit: 10 } });
@@ -811,12 +804,14 @@ describe("createCrudHandler", () => {
     it("generates same serverSyncedAt for all records in a batch", async () => {
       const timestamps: string[] = [];
       const handler = createCrudHandler<TestItem, TestQuery>({
+        fetch: () => [],
         create: (record) => {
           timestamps.push(record.serverSyncedAt);
         },
         update: (record) => {
           timestamps.push(record.serverSyncedAt);
         },
+        remove: () => {},
       });
 
       await handler({
@@ -835,9 +830,12 @@ describe("createCrudHandler", () => {
     it("wraps change data into ServerRecord format", async () => {
       let capturedRecord: unknown = null;
       const handler = createCrudHandler<TestItem, TestQuery>({
+        fetch: () => [],
         create: (record) => {
           capturedRecord = record;
         },
+        update: () => {},
+        remove: () => {},
       });
 
       await handler({
@@ -855,6 +853,9 @@ describe("createCrudHandler", () => {
     it("sets deleted flag for delete changes", async () => {
       let capturedRecord: unknown = null;
       const handler = createCrudHandler<TestItem, TestQuery>({
+        fetch: () => [],
+        create: () => {},
+        update: () => {},
         remove: (record) => {
           capturedRecord = record;
         },

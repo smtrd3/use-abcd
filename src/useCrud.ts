@@ -1,8 +1,8 @@
 import { useMemo, useSyncExternalStore } from "react";
 import type { Draft } from "mutative";
-import { ulid } from "ulid";
 import { Collection, buildServerSnapshot } from "./collection";
 import type { Config, Mutator } from "./types";
+import { getIdFromTime } from "./utils";
 
 export type {
   Config,
@@ -40,7 +40,7 @@ export function useCrud<T extends { id: string }, C>(config: Config<T, C>) {
     fetchError: state.fetchError,
 
     // Item operations
-    create: (item: Omit<T, "id">) => collection.create({ ...item, id: ulid() } as T),
+    create: (item: Omit<T, "id">) => collection.create({ ...item, id: getIdFromTime() } as T),
     update: (id: string, mutate: (draft: Draft<T>) => void) => collection.update(id, mutate),
     remove: (id: string) => collection.remove(id),
     getItem: (id: string) => collection.getItem(id),

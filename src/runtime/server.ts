@@ -1,7 +1,7 @@
-import { ulid } from "ulid";
 import { isArray, map } from "lodash-es";
 import type { Change, Result } from "../types";
 import type { SyncRequestBody, SyncResponseBody, ServerRecord } from "./types";
+import { getIdFromTime } from "../utils";
 
 export type { SyncRequestBody, SyncResponseBody, ServerRecord };
 
@@ -14,17 +14,23 @@ export type CrudHandler<T, Q = unknown> = (request: {
 export type FetchResult<T, S = unknown> = T[] | { items: T[]; serverState?: S };
 
 export type SyncServerConfig<T extends { id: string }, Q = unknown, S = unknown> = {
-  fetch?: (params: { scope?: string; query: Q }) => Promise<FetchResult<T, S>> | FetchResult<T, S>;
-  create?: (record: ServerRecord<T>) => Promise<void> | void;
-  update?: (record: ServerRecord<T>) => Promise<void> | void;
-  remove?: (record: ServerRecord<T>) => Promise<void> | void;
+  fetch: (params: { scope?: string; query: Q }) => Promise<FetchResult<T, S>> | FetchResult<T, S>;
+  create: (record: ServerRecord<T>) => Promise<void> | void;
+  update: (record: ServerRecord<T>) => Promise<void> | void;
+  remove: (record: ServerRecord<T>) => Promise<void> | void;
+};
+
+const operations: Record<string, "create" | "update" | "remove"> = {
+  create: "create",
+  update: "update",
+  delete: "remove",
 };
 
 export function createCrudHandler<T extends { id: string }, Q = unknown, S = unknown>(
   config: SyncServerConfig<T, Q, S>,
 ): CrudHandler<T, Q> {
   return async (request) => {
-    const serverSyncedAt = ulid();
+    const serverSyncedAt = getIdFromTime();
     const response: SyncResponseBody<T> = { serverSyncedAt };
 
     // Process all changes in parallel
@@ -39,13 +45,7 @@ export function createCrudHandler<T extends { id: string }, Q = unknown, S = unk
               deleted: change.type === "delete",
             };
 
-            if (change.type === "create" && config.create) {
-              await config.create(record);
-            } else if (change.type === "update" && config.update) {
-              await config.update(record);
-            } else if (change.type === "delete" && config.remove) {
-              await config.remove(record);
-            }
+            await config[operations[change.type]](record);
             return { status: "success", id: change.data.id, type: change.type, serverSyncedAt };
           } catch (error) {
             return {
@@ -60,7 +60,7 @@ export function createCrudHandler<T extends { id: string }, Q = unknown, S = unk
       );
     }
 
-    if (request.query !== undefined && config.fetch) {
+    if (request.query !== undefined) {
       const result = await config.fetch({ scope: request.scope, query: request.query });
       if (isArray(result)) {
         response.items = result;

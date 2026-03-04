@@ -17,7 +17,7 @@ import {
 import type { Draft } from "mutative";
 import type { Collection } from "./collection";
 import type { ItemStatus } from "./types";
-import { ulid } from "ulid";
+import { getIdFromTime } from "./utils";
 
 const DEFAULT_SEPARATOR = ".";
 
@@ -116,7 +116,7 @@ export class Node<T extends object, C = unknown, NodeType = string> {
 
   private _generateChildId(): string {
     const { getNodeId } = this._collection.config;
-    const nodeId = getNodeId ? getNodeId() : ulid();
+    const nodeId = getNodeId ? getNodeId() : getIdFromTime();
     return join([this._id, nodeId], this._separator);
   }
 
@@ -313,7 +313,7 @@ export class Node<T extends object, C = unknown, NodeType = string> {
     if (!nodeData) return new Map();
 
     const { getNodeId } = this._collection.config;
-    const cloneRootId = getNodeId ? getNodeId() : ulid();
+    const cloneRootId = getNodeId ? getNodeId() : getIdFromTime();
     const result = new Map<string, TreeNode<T, NodeType>>();
 
     // Clone self

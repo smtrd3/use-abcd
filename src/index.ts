@@ -41,6 +41,9 @@ export type {
   Mutator,
 } from "./types";
 
+// Utils
+export { getTimeFromId, getIdFromTime, compareTimeIds } from "./utils";
+
 // Sync utilities (Client-side only - server utilities are in use-abcd/runtime/server)
 export { createSyncClient } from "./runtime";
 export type { SyncRequestBody, SyncResponseBody, ServerRecord, SyncClientConfig } from "./runtime";

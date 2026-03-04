@@ -72,7 +72,7 @@ export type CrudHandler<T extends { id: string }, C> = (
 export type Config<T extends { id: string }, C> = {
   id: string;
   initialContext: C;
-  serverItems?: T[];
+  serverItems?: T[]; // items will be resolved at server using this settings, on client this can act as initial state
 
   // Sync configuration
   syncDebounce?: number; // ms, default 300
@@ -88,7 +88,7 @@ export type Config<T extends { id: string }, C> = {
 
   // Tree configuration
   rootId?: string; // If set, collection is a tree
-  getNodeId?: () => string; // Custom node ID generator (default: lodash uniqueId)
+  getNodeId?: () => string; // Custom node ID generator for child nodes
   nodeSeparator?: string; // Separator for node IDs (default: ".")
 
   // Unified handler (replaces onFetch + onSync)
