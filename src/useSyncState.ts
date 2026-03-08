@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from "react";
-import { Collection } from "./collection";
+import { Collection, type CollectionState } from "./collection";
 import type { SyncState, Change, SyncError } from "./types";
 
 export type UseSyncStateResult<T = unknown> = {
@@ -29,7 +29,7 @@ export function useSyncState<T = unknown>(collectionId: string): UseSyncStateRes
     );
   }
 
-  const state = useSyncExternalStore(
+  const state = useSyncExternalStore<CollectionState<{ id: string }, unknown>>(
     (cb) => collection.subscribe(cb),
     () => collection.getState(),
     () => collection.getState(),

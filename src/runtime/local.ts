@@ -324,7 +324,7 @@ export function useLocalSyncState<T extends { id: string }>(
   collectionId: string,
   localClient: ReturnType<typeof createLocalSyncClient<T>>,
 ) {
-  const state = useSyncExternalStore(
+  const state = useSyncExternalStore<SyncQueueState<T>>(
     localClient.subscribe,
     localClient.getState,
     localClient.getState,

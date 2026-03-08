@@ -46,7 +46,7 @@ export function useSelectedNode<T extends object, C, NodeType = string>(
     );
   }
 
-  const selectedNode = useSyncExternalStore(
+  const selectedNode = useSyncExternalStore<Node<T, C, NodeType> | null>(
     (cb) => collection.subscribe(cb),
     () => collection.selectedNode as Node<T, C, NodeType> | null,
     () => collection.selectedNode as Node<T, C, NodeType> | null,

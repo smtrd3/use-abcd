@@ -15,19 +15,19 @@ export function useItem<T extends { id: string }, C>(item: Item<T, C>): UseItemR
   // Note: Item cache is now managed by Collection.setContext()
   // Cache is automatically cleared when context changes
 
-  const data = useSyncExternalStore(
+  const data = useSyncExternalStore<T | undefined>(
     (callback) => item.collection.subscribe(callback),
     () => item.data,
     () => item.data,
   );
 
-  const status = useSyncExternalStore(
+  const status = useSyncExternalStore<ItemStatus>(
     (callback) => item.collection.subscribe(callback),
     () => item.getStatus(),
     () => item.getStatus(),
   );
 
-  const exists = useSyncExternalStore(
+  const exists = useSyncExternalStore<boolean>(
     (callback) => item.collection.subscribe(callback),
     () => item.exists(),
     () => item.exists(),

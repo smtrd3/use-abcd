@@ -1,6 +1,6 @@
 import { useMemo, useSyncExternalStore } from "react";
 import type { Draft } from "mutative";
-import { Collection, buildServerSnapshot } from "./collection";
+import { Collection, buildServerSnapshot, type CollectionState } from "./collection";
 import type { Config, Mutator } from "./types";
 import { getIdFromTime } from "./utils";
 
@@ -22,7 +22,7 @@ export function useCrud<T extends { id: string }, C>(config: Config<T, C>) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const serverSnapshot = useMemo(() => buildServerSnapshot(config), [config.id]);
 
-  const state = useSyncExternalStore(
+  const state = useSyncExternalStore<CollectionState<T, C>>(
     (callback) => collection.subscribe(callback),
     () => collection.getState(),
     () => serverSnapshot,

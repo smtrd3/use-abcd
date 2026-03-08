@@ -33,25 +33,25 @@ export function useNode<T extends object, C, NodeType = string>(
 ): UseNodeResult<T, C, NodeType> {
   const subscribe = useCallback((cb: () => void) => node.collection.subscribe(cb), [node]);
 
-  const data = useSyncExternalStore(
+  const data = useSyncExternalStore<TreeNode<T, NodeType> | undefined>(
     subscribe,
     () => node.data,
     () => node.data,
   );
 
-  const status = useSyncExternalStore(
+  const status = useSyncExternalStore<ItemStatus>(
     subscribe,
     () => node.getStatus(),
     () => node.getStatus(),
   );
 
-  const exists = useSyncExternalStore(
+  const exists = useSyncExternalStore<boolean>(
     subscribe,
     () => node.exists(),
     () => node.exists(),
   );
 
-  const isSelected = useSyncExternalStore(
+  const isSelected = useSyncExternalStore<boolean>(
     subscribe,
     () => node.collection.selectedNodeId === node.id,
     () => node.collection.selectedNodeId === node.id,

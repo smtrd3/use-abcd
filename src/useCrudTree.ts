@@ -1,6 +1,6 @@
 import { useSyncExternalStore, useCallback, useMemo } from "react";
 import { sortBy, map, filter } from "lodash-es";
-import { Collection, buildServerSnapshot } from "./collection";
+import { Collection, buildServerSnapshot, type CollectionState } from "./collection";
 import type { Node, TreeNode } from "./node";
 import type { Config, Mutator } from "./types";
 
@@ -31,13 +31,13 @@ export function useCrudTree<T extends object, C, NodeType = string>(
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const serverSnapshot = useMemo(() => buildServerSnapshot(fullConfig), [config.id]);
 
-  const state = useSyncExternalStore(
+  const state = useSyncExternalStore<CollectionState<TreeNode<T, NodeType>, C>>(
     (callback) => collection.subscribe(callback),
     () => collection.getState(),
     () => serverSnapshot,
   );
 
-  const rootNode = useSyncExternalStore(
+  const rootNode = useSyncExternalStore<Node<T, C, NodeType> | null>(
     (cb) => collection.subscribe(cb),
     () => {
       const rootData = collection.items.get(config.rootId);
@@ -48,13 +48,13 @@ export function useCrudTree<T extends object, C, NodeType = string>(
     () => null,
   );
 
-  const selectedNodeId = useSyncExternalStore(
+  const selectedNodeId = useSyncExternalStore<string | null>(
     (cb) => collection.subscribe(cb),
     () => collection.selectedNodeId,
     () => null,
   );
 
-  const selectedNode = useSyncExternalStore(
+  const selectedNode = useSyncExternalStore<Node<T, C, NodeType> | null>(
     (cb) => collection.subscribe(cb),
     () => collection.selectedNode as Node<T, C, NodeType> | null,
     () => null,
