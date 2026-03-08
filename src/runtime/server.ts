@@ -1,4 +1,4 @@
-import { isArray, map } from "lodash-es";
+import { isArray, map, get } from "lodash-es";
 import type { Change, Result } from "../types";
 import type { SyncRequestBody, SyncResponseBody, ServerRecord } from "./types";
 import { getIdFromTime } from "../utils";
@@ -15,9 +15,9 @@ export type FetchResult<T, S = unknown> = T[] | { items: T[]; serverState?: S };
 
 export type SyncServerConfig<T extends { id: string }, Q = unknown, S = unknown> = {
   fetch: (params: { scope?: string; query: Q }) => Promise<FetchResult<T, S>> | FetchResult<T, S>;
-  create: (record: ServerRecord<T>) => Promise<void> | void;
-  update: (record: ServerRecord<T>) => Promise<void> | void;
-  remove: (record: ServerRecord<T>) => Promise<void> | void;
+  create: (record: ServerRecord<T>, request: SyncRequestBody<T, Q>) => Promise<void> | void;
+  update: (record: ServerRecord<T>, request: SyncRequestBody<T, Q>) => Promise<void> | void;
+  remove: (record: ServerRecord<T>, request: SyncRequestBody<T, Q>) => Promise<void> | void;
 };
 
 const operations: Record<string, "create" | "update" | "remove"> = {
@@ -45,7 +45,7 @@ export function createCrudHandler<T extends { id: string }, Q = unknown, S = unk
               deleted: change.type === "delete",
             };
 
-            await config[operations[change.type]](record);
+            await get(config, operations[change.type])(record, request);
             return { status: "success", id: change.data.id, type: change.type, serverSyncedAt };
           } catch (error) {
             return {
