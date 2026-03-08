@@ -17,6 +17,7 @@ import type {
 export type CollectionState<T, C> = {
   context: C;
   items: Map<string, T>;
+  serverState?: unknown;
   syncState: SyncState;
   loading: boolean;
   syncing: boolean;
@@ -97,8 +98,11 @@ export class Collection<T extends { id: string }, C> {
     // Derive fetch/sync from unified handler
     const fetchFn = config.handler
       ? (ctx: C, signal: AbortSignal) =>
-          config.handler!({ query: ctx }, signal).then((r) => r.items ?? [])
-      : async () => [] as T[];
+          config.handler!({ query: ctx }, signal).then((r) => ({
+            items: r.items ?? [],
+            serverState: r.serverState,
+          }))
+      : async () => ({ items: [] as T[] });
 
     const syncFn = config.handler
       ? (changes: Change<T>[], _ctx: C, signal: AbortSignal) => config.handler!({ changes }, signal)
@@ -388,6 +392,7 @@ export class Collection<T extends { id: string }, C> {
     this._state = create(this._state, (draft) => {
       draft.fetchStatus = fetchState.status;
       draft.fetchError = fetchState.error;
+      draft.serverState = fetchState.serverState;
       draft.loading = fetchState.status === "fetching";
       draft.syncState = this._computeSyncState(fetchState.status, draft.syncQueue.isSyncing);
 

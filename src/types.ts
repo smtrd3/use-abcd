@@ -1,3 +1,5 @@
+import type { SyncResponseBody } from "./runtime";
+
 export type JsonValue = string | number | boolean | null | undefined;
 
 export type PlainObject = {
@@ -66,7 +68,7 @@ export type FetchState = "idle" | "fetching" | "error";
 export type CrudHandler<T extends { id: string }, C> = (
   params: { query?: C; changes?: Change<T>[] },
   signal?: AbortSignal,
-) => Promise<SyncResponse<T>>;
+) => Promise<SyncResponseBody<T>>;
 
 // Config
 export type Config<T extends { id: string }, C> = {

@@ -4,6 +4,7 @@ import React from "react";
 import { renderToString } from "react-dom/server";
 import { hydrateRoot } from "react-dom/client";
 import { useCrud, type Config } from "../useCrud";
+import { useServerState } from "../useServerState";
 import { Collection, buildServerSnapshot } from "../collection";
 
 interface TestValue {
@@ -218,6 +219,77 @@ describe("useCrud", () => {
     });
   });
 
+  describe("serverState", () => {
+    it("exposes serverState from handler response", async () => {
+      const serverStateConfig: Config<TestValue, TestContext> = {
+        id: "test-crud-server-state",
+        initialContext: {},
+        handler: async () => ({
+          items: [{ id: "1", name: "Item 1" }],
+          serverSyncedAt: "",
+          serverState: { total: 42, hasMore: true },
+        }),
+      };
+
+      const { result } = renderHook(() => useCrud(serverStateConfig));
+
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      });
+
+      expect(result.current.serverState).toEqual({ total: 42, hasMore: true });
+      expect(result.current.items.size).toBe(1);
+
+      Collection.clear("test-crud-server-state");
+    });
+
+    it("serverState is undefined when handler does not return it", async () => {
+      const { result } = renderHook(() => useCrud(config));
+
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      });
+
+      expect(result.current.serverState).toBeUndefined();
+    });
+
+    it("serverState updates when context changes", async () => {
+      let page = 1;
+      const paginatedConfig: Config<TestValue, TestContext> = {
+        id: "test-crud-server-state-update",
+        initialContext: { filter: "a" },
+        handler: async () => ({
+          items: [],
+          serverSyncedAt: "",
+          serverState: { page: page++ },
+        }),
+      };
+
+      const { result } = renderHook(() => useCrud(paginatedConfig));
+
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      });
+
+      expect(result.current.serverState).toEqual({ page: 1 });
+
+      // Change context to trigger refetch
+      act(() => {
+        result.current.setContext((draft) => {
+          draft.filter = "b";
+        });
+      });
+
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      });
+
+      expect(result.current.serverState).toEqual({ page: 2 });
+
+      Collection.clear("test-crud-server-state-update");
+    });
+  });
+
   describe("snapshot stability", () => {
     it("does not cause infinite loop - snapshot reference is stable when no changes occur", async () => {
       const { result, rerender } = renderHook(() => useCrud(config));
@@ -265,5 +337,64 @@ describe("useCrud", () => {
       rerender();
       expect(result.current.items).toBe(itemsAfterCreate);
     });
+  });
+});
+
+describe("useServerState", () => {
+  afterEach(() => {
+    Collection.clear("test-server-state-hook");
+  });
+
+  it("returns serverState from collection", async () => {
+    const config: Config<TestValue, TestContext> = {
+      id: "test-server-state-hook",
+      initialContext: {},
+      handler: async () => ({
+        items: [{ id: "1", name: "Item" }],
+        serverSyncedAt: "",
+        serverState: { total: 100, cursor: "abc" },
+      }),
+    };
+
+    const { result } = renderHook(() => {
+      const crud = useCrud(config);
+      const serverState = useServerState<{ total: number; cursor: string }>(
+        "test-server-state-hook",
+        { total: 0, cursor: "" },
+      );
+      return { crud, serverState };
+    });
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+
+    expect(result.current.serverState).toEqual({ total: 100, cursor: "abc" });
+  });
+
+  it("returns defaultValue when serverState is undefined", async () => {
+    const config: Config<TestValue, TestContext> = {
+      id: "test-server-state-hook",
+      initialContext: {},
+      handler: async () => ({ items: [], serverSyncedAt: "" }),
+    };
+
+    const { result } = renderHook(() => {
+      const crud = useCrud(config);
+      const serverState = useServerState<{ total: number }>("test-server-state-hook", { total: 0 });
+      return { crud, serverState };
+    });
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+
+    expect(result.current.serverState).toEqual({ total: 0 });
+  });
+
+  it("throws when collection does not exist", () => {
+    expect(() => {
+      renderHook(() => useServerState("nonexistent", null));
+    }).toThrow('Collection with id "nonexistent" not found');
   });
 });

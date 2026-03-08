@@ -9,6 +9,7 @@ export type { UseNodeResult } from "./useNode";
 export { useSelectedNode } from "./useSelectedNode";
 export { useSyncState } from "./useSyncState";
 export type { UseSyncStateResult } from "./useSyncState";
+export { useServerState } from "./useServerState";
 
 // Classes
 export { Collection, buildServerSnapshot } from "./collection";

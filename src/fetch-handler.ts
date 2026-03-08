@@ -2,24 +2,30 @@ import { create } from "mutative";
 import { Cache } from "./cache";
 import type { FetchState } from "./types";
 
+export type FetchResult<T> = {
+  items: T[];
+  serverState?: unknown;
+};
+
 export type FetchHandlerConfig<T, C> = {
   id: string;
   cacheCapacity: number;
   cacheTtl: number;
   retries?: number;
-  onFetch: (context: C, signal: AbortSignal) => Promise<T[]>;
+  onFetch: (context: C, signal: AbortSignal) => Promise<FetchResult<T>>;
 };
 
 export type FetchHandlerState<T> = {
   status: FetchState;
   items: T[];
+  serverState?: unknown;
   error?: string;
   retryCount?: number;
 };
 
 export class FetchHandler<T, C> {
   private _config: FetchHandlerConfig<T, C>;
-  private _cache: Cache<T[]>;
+  private _cache: Cache<FetchResult<T>>;
   private _state: FetchHandlerState<T> = { status: "idle", items: [] };
   private _subscribers = new Set<() => void>();
   private _abortController: AbortController | null = null;
@@ -27,7 +33,7 @@ export class FetchHandler<T, C> {
 
   constructor(config: FetchHandlerConfig<T, C>) {
     this._config = { retries: 0, ...config };
-    this._cache = new Cache<T[]>(config.cacheCapacity, config.cacheTtl);
+    this._cache = new Cache<FetchResult<T>>(config.cacheCapacity, config.cacheTtl);
   }
 
   private _getCacheKey = (context: C): string => JSON.stringify([this._config.id, context]);
@@ -39,7 +45,7 @@ export class FetchHandler<T, C> {
     this._subscribers.forEach((cb) => cb());
   }
 
-  private async _fetchWithRetry(context: C, signal: AbortSignal): Promise<T[]> {
+  private async _fetchWithRetry(context: C, signal: AbortSignal): Promise<FetchResult<T>> {
     const maxRetries = this._config.retries!;
     let lastError: unknown;
 
@@ -58,13 +64,19 @@ export class FetchHandler<T, C> {
     throw lastError;
   }
 
-  async fetch(context: C): Promise<T[]> {
+  async fetch(context: C): Promise<FetchResult<T>> {
     const cacheKey = this._getCacheKey(context);
     const cached = this._cache.get(cacheKey);
 
     if (cached !== null) {
       this._currentContext = context;
-      this._setState({ status: "idle", items: cached, error: undefined, retryCount: undefined });
+      this._setState({
+        status: "idle",
+        items: cached.items,
+        serverState: cached.serverState,
+        error: undefined,
+        retryCount: undefined,
+      });
       return cached;
     }
 
@@ -75,14 +87,21 @@ export class FetchHandler<T, C> {
     this._setState({ status: "fetching", error: undefined, retryCount: undefined });
 
     try {
-      const items = await this._fetchWithRetry(context, abortController.signal);
-      this._cache.set(cacheKey, items);
+      const result = await this._fetchWithRetry(context, abortController.signal);
+      this._cache.set(cacheKey, result);
       this._abortController = null;
-      this._setState({ status: "idle", items, error: undefined, retryCount: undefined });
-      return items;
+      this._setState({
+        status: "idle",
+        items: result.items,
+        serverState: result.serverState,
+        error: undefined,
+        retryCount: undefined,
+      });
+      return result;
     } catch (error) {
       // If this request was aborted, return current items silently
-      if (abortController.signal.aborted) return this._state.items;
+      if (abortController.signal.aborted)
+        return { items: this._state.items, serverState: this._state.serverState };
 
       this._abortController = null;
       this._setState({
@@ -93,7 +112,7 @@ export class FetchHandler<T, C> {
     }
   }
 
-  async refresh(context?: C): Promise<T[]> {
+  async refresh(context?: C): Promise<FetchResult<T>> {
     const ctx = context ?? this._currentContext;
     if (!ctx) throw new Error("No context provided for refresh");
 

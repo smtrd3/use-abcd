@@ -61,7 +61,8 @@ describe("FetchHandler", () => {
 
         const response = await fetch(`/api/items?${params}`, { signal });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        return response.json();
+        const items = await response.json();
+        return { items };
       },
       ...overrides,
     });
@@ -81,7 +82,7 @@ describe("FetchHandler", () => {
 
       const result = await fetchHandler.fetch({ page: 1, limit: 10 });
 
-      expect(result).toEqual(mockItems);
+      expect(result).toEqual({ items: mockItems });
       expect(fetchHandler.getState().status).toBe("idle");
       expect(fetchHandler.getState().items).toEqual(mockItems);
       expect(fetchHandler.getState().error).toBeUndefined();
@@ -122,7 +123,7 @@ describe("FetchHandler", () => {
 
       const result = await fetchHandler.fetch({ page: 1, limit: 10, search: "Item 1" });
 
-      expect(result).toEqual([{ id: "1", name: "Item 1" }]);
+      expect(result.items).toEqual([{ id: "1", name: "Item 1" }]);
     });
   });
 
@@ -358,10 +359,10 @@ describe("FetchHandler", () => {
       const [firstResult, secondResult] = await Promise.all([firstFetch, secondFetch]);
 
       // First fetch should return current items (empty initially, then aborted)
-      expect(firstResult).toEqual([]);
+      expect(firstResult.items).toEqual([]);
 
       // Second fetch should complete successfully
-      expect(secondResult).toEqual(mockItems);
+      expect(secondResult).toEqual({ items: mockItems });
     });
 
     it("should not update state after abort", async () => {
@@ -407,7 +408,7 @@ describe("FetchHandler", () => {
       const result = await fetchHandler.fetch({ page: 1, limit: 10 });
 
       expect(attemptCount).toBe(3);
-      expect(result).toEqual(mockItems);
+      expect(result).toEqual({ items: mockItems });
       expect(fetchHandler.getState().status).toBe("idle");
     });
 
@@ -610,7 +611,7 @@ describe("FetchHandler", () => {
       fetchHandler = createFetchHandler();
       const result = await fetchHandler.fetch({ page: 1, limit: 10 });
 
-      expect(result).toEqual([]);
+      expect(result).toEqual({ items: [] });
       expect(fetchHandler.getState().items).toEqual([]);
     });
 
@@ -670,7 +671,7 @@ describe("FetchHandler", () => {
         cacheTtl: 5000,
         onFetch: async () => {
           fetchCount1++;
-          return mockItems;
+          return { items: mockItems };
         },
       });
 
@@ -680,7 +681,7 @@ describe("FetchHandler", () => {
         cacheTtl: 5000,
         onFetch: async () => {
           fetchCount2++;
-          return mockItems;
+          return { items: mockItems };
         },
       });
 

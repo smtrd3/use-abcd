@@ -27,6 +27,31 @@ describe("useCrudTree", () => {
     Collection.clear("test-crud-tree");
   });
 
+  describe("serverState", () => {
+    it("exposes serverState from handler response", async () => {
+      const serverStateConfig: TreeConfig<TestValue, TestContext> = {
+        id: "test-crud-tree-server-state",
+        initialContext: {},
+        rootId: "root",
+        handler: async () => ({
+          items: [],
+          serverSyncedAt: "",
+          serverState: { nodeCount: 10 },
+        }),
+      };
+
+      const { result } = renderHook(() => useCrudTree(serverStateConfig));
+
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      });
+
+      expect(result.current.serverState).toEqual({ nodeCount: 10 });
+
+      Collection.clear("test-crud-tree-server-state");
+    });
+  });
+
   describe("snapshot stability", () => {
     it("does not cause infinite loop - snapshot reference is stable when no changes occur", async () => {
       const { result, rerender } = renderHook(() => useCrudTree(config));

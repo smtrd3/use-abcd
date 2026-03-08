@@ -38,6 +38,7 @@ export function useCrud<T extends { id: string }, C>(config: Config<T, C>) {
     syncing: state.syncing,
     fetchStatus: state.fetchStatus,
     fetchError: state.fetchError,
+    serverState: state.serverState,
 
     // Item operations
     create: (item: Omit<T, "id">) => collection.create({ ...item, id: getIdFromTime() } as T),

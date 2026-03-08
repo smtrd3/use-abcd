@@ -105,6 +105,7 @@ export function useCrudTree<T extends object, C, NodeType = string>(
     syncing: state.syncing,
     fetchStatus: state.fetchStatus,
     fetchError: state.fetchError,
+    serverState: state.serverState,
 
     // Node operations
     getNode: (id: string) => collection.getNode<T, NodeType>(id) as Node<T, C, NodeType>,
