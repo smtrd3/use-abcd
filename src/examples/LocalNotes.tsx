@@ -1,6 +1,7 @@
 import React, { useCallback, useState } from "react";
 import { useCrud, type Config } from "../useCrud";
 import { createLocalSyncClient, useLocalSyncState } from "../runtime/local";
+import { getIdFromTime } from "../utils";
 
 interface Note {
   id: string;
@@ -37,6 +38,7 @@ export const LocalNotes = React.memo(function LocalNotes() {
 
   const handleCreate = useCallback(() => {
     create({
+      id: getIdFromTime(),
       title: "Untitled note",
       body: "",
       updatedAt: new Date().toISOString(),

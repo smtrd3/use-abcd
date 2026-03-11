@@ -1,6 +1,7 @@
 import React, { useCallback } from "react";
 import { useCrud, type Config } from "../useCrud";
 import { createSyncClient } from "../runtime/client";
+import { getIdFromTime } from "../utils";
 
 interface User {
   id: string;
@@ -66,6 +67,7 @@ export const PaginatedUsers = React.memo(function PaginatedUsers() {
     if (name && email) {
       // id is auto-generated; pass one explicitly only if needed
       create({
+        id: getIdFromTime(),
         name,
         email,
         role: "user",

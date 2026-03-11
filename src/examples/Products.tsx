@@ -3,6 +3,7 @@ import { useCrud, type Config } from "../useCrud";
 import { createSyncClient } from "../runtime/client";
 import { useItem } from "../useItem";
 import type { Item } from "../item";
+import { getIdFromTime } from "../utils";
 
 interface Product {
   id: string;
@@ -179,6 +180,7 @@ export const Products = React.memo(function Products() {
 
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newProduct, setNewProduct] = useState({
+    id: getIdFromTime(),
     name: "",
     price: 0,
     category: "electronics",
@@ -194,7 +196,7 @@ export const Products = React.memo(function Products() {
     // id is auto-generated; pass one explicitly only if needed
     create(newProduct);
 
-    setNewProduct({ name: "", price: 0, category: "electronics", stock: 0 });
+    setNewProduct({ id: getIdFromTime(), name: "", price: 0, category: "electronics", stock: 0 });
     setShowCreateForm(false);
   }, [newProduct, create]);
 

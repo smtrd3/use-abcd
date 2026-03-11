@@ -1,6 +1,7 @@
 import React, { useCallback, useState } from "react";
 import { useCrud, type Config } from "../useCrud";
 import { createSyncClient } from "../runtime/client";
+import { getIdFromTime } from "../utils";
 
 interface Comment {
   id: string;
@@ -58,6 +59,7 @@ export const OptimisticComments = React.memo(function OptimisticComments() {
     // Optimistic create - immediately shows in UI
     // id is auto-generated; pass one explicitly only if needed
     create({
+      id: getIdFromTime(),
       postId: "1",
       text: newCommentText,
       author: "You",
