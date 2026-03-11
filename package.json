@@ -1,6 +1,6 @@
 {
   "name": "use-abcd",
-  "version": "1.6.5",
+  "version": "1.6.6",
   "description": "Simple react hook for CRUD type apps",
   "repository": {
     "url": "https://github.com/smtrd3/use-abcd"
