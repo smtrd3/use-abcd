@@ -229,7 +229,7 @@ export class Collection<T extends { id: string }, C> {
       return id;
     }
 
-    throw new Error("`id` property is required in items");
+    throw new Error("`id` property should exist and should be non-empty");
   }
 
   update(id: string, mutate: (draft: Draft<T>) => void): void {
