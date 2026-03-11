@@ -1,5 +1,5 @@
 import { create, type Draft } from "mutative";
-import { map, set } from "lodash-es";
+import { isString, map, set, size } from "lodash-es";
 import { SyncQueue } from "./sync-queue";
 import { FetchHandler } from "./fetch-handler";
 import { Item } from "./item";
@@ -218,14 +218,18 @@ export class Collection<T extends { id: string }, C> {
   create(item: T): string {
     const { id } = item;
 
-    this._state = create(this._state, (draft) => {
-      draft.items.set(id, item as Draft<T>);
-    });
+    if (isString(id) && size(id) > 0) {
+      this._state = create(this._state, (draft) => {
+        draft.items.set(id, item as Draft<T>);
+      });
 
-    this._fetchHandler.invalidateCache();
-    this._notifySubscribers();
-    this._syncQueue.enqueue({ id, type: "create", data: item });
-    return id;
+      this._fetchHandler.invalidateCache();
+      this._notifySubscribers();
+      this._syncQueue.enqueue({ id, type: "create", data: item });
+      return id;
+    }
+
+    throw new Error("`id` property is required in items");
   }
 
   update(id: string, mutate: (draft: Draft<T>) => void): void {
