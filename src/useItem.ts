@@ -11,9 +11,11 @@ export type UseItemResult<T> = {
   exists: boolean;
 };
 
-export function useItem<T extends { id: string }, C>(item: Item<T, C>): UseItemResult<T> {
-  // Note: Item cache is now managed by Collection.setContext()
-  // Cache is automatically cleared when context changes
+export function useItem<T extends { id: string }, C>(
+  item: Item<T, C>,
+  options?: { trackStatus?: boolean },
+): UseItemResult<T> {
+  const trackStatus = options?.trackStatus ?? true;
 
   const data = useSyncExternalStore<T | undefined>(
     (callback) => item.collection.subscribe(callback),
@@ -22,9 +24,9 @@ export function useItem<T extends { id: string }, C>(item: Item<T, C>): UseItemR
   );
 
   const status = useSyncExternalStore<ItemStatus>(
-    (callback) => item.collection.subscribe(callback),
-    () => item.getStatus(),
-    () => item.getStatus(),
+    trackStatus ? (callback) => item.collection.subscribe(callback) : noopSubscribe,
+    trackStatus ? () => item.getStatus() : noopStatus,
+    trackStatus ? () => item.getStatus() : noopStatus,
   );
 
   const exists = useSyncExternalStore<boolean>(
@@ -39,3 +41,6 @@ export function useItem<T extends { id: string }, C>(item: Item<T, C>): UseItemR
 
   return { data, status, update, remove, exists };
 }
+
+const noopSubscribe = () => () => {};
+const noopStatus = (): ItemStatus => null;

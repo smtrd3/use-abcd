@@ -30,7 +30,9 @@ export type UseNodeResult<T extends object, C, NodeType = string> = {
 
 export function useNode<T extends object, C, NodeType = string>(
   node: Node<T, C, NodeType>,
+  options?: { trackStatus?: boolean },
 ): UseNodeResult<T, C, NodeType> {
+  const trackStatus = options?.trackStatus ?? true;
   const subscribe = useCallback((cb: () => void) => node.collection.subscribe(cb), [node]);
 
   const data = useSyncExternalStore<TreeNode<T, NodeType> | undefined>(
@@ -40,9 +42,9 @@ export function useNode<T extends object, C, NodeType = string>(
   );
 
   const status = useSyncExternalStore<ItemStatus>(
-    subscribe,
-    () => node.getStatus(),
-    () => node.getStatus(),
+    trackStatus ? subscribe : noopSubscribe,
+    trackStatus ? () => node.getStatus() : noopStatus,
+    trackStatus ? () => node.getStatus() : noopStatus,
   );
 
   const exists = useSyncExternalStore<boolean>(
@@ -104,3 +106,6 @@ export function useNode<T extends object, C, NodeType = string>(
     deselect,
   };
 }
+
+const noopSubscribe = () => () => {};
+const noopStatus = (): ItemStatus => null;
